@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "adaptive-canvas-ai"
+version = "0.1.0"
+description = ""
+authors = ["Himanshu Gupta <ghimax23@gmail.com>"]
+readme = "README.md"
+packages = [{include = "adaptive_canvas_ai", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+langgraph = "*"
+langchain-google-genai = "*"
+pydantic = "*"
+python-dotenv = "*"
+pillow = "*"
+numpy = "*"
+rembg = "*"
+onnxruntime = "*"
+streamlit = "^1.52.0"
+watchdog = "^6.0.0"
+google-genai = "^1.53.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
