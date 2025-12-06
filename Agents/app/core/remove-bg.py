@@ -7,7 +7,6 @@ def remove_background_service(input_path: str, output_path: str) -> bool:
         with open(input_path, "rb") as input_file:
             input_data = input_file.read()
         
-        # The magic happens here
         output_data = remove(input_data)
         
         # Save the result

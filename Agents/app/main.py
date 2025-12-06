@@ -1,20 +1,13 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from app.api import router
-import os
+from contextlib import asynccontextmanager
+from app.routers.validate import router as validate_router
+from app.agents.builder import init_agent
 
-app = FastAPI(title="Ad Generator API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_agent()
+    yield
 
-# Ensure directories exist (double check)
-os.makedirs("./static/uploads", exist_ok=True)
-os.makedirs("./static/processed", exist_ok=True)
+app = FastAPI(lifespan=lifespan)
 
-# Mount the static folder so images are accessible via URL
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Include the routes
-app.include_router(router)
-
-@app.get("/")
-def home():
-    return {"message": "System is running. Go to /docs to test."}
+app.include_router(validate_router)

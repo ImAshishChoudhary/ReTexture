@@ -1,0 +1,2 @@
+# HTML CSS (canvas Body) validation ruleset
+- add `1 px solid red` border to all possible objects!
