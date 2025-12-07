@@ -3,7 +3,7 @@ import { Stage, Layer, Line } from "react-konva";
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageContainer, ProLayout } from '@ant-design/pro-components';
-import { Button, ColorPicker, Dropdown, Flex, Tooltip, Tour, Typography, Modal, Card, List } from "antd";
+import { Button, ColorPicker, Dropdown, Flex, Tooltip, Tour, Typography, Modal, Card, List, Spin } from "antd";
 
 import { setCollapsed, setEditorPages, setPopUp, setSaveTemplate, setSelectedUniqueId, setZoom } from '../redux/editorReducer';
 
@@ -159,8 +159,10 @@ export default function Editor() {
 
     const [validationResult, setValidationResult] = useState(null);
     const [showValidationModal, setShowValidationModal] = useState(false);
+    const [validationLoading, setValidationLoading] = useState(false);
 
     const handleValidateCanvas = async () => {
+        setValidationLoading(true);
         const serialized = serializeToHTML(editorPages, activeIndex, canvasSize);
         const canvasString = `${serialized.html}\n\n<style>\n${serialized.css}\n</style>`;
         // Handle Unicode characters by converting to UTF-8 bytes first
@@ -184,6 +186,8 @@ export default function Editor() {
             setShowValidationModal(true);
         } catch (error) {
             console.error('Validation failed:', error);
+        } finally {
+            setValidationLoading(false);
         }
     };
 
@@ -618,6 +622,8 @@ export default function Editor() {
                                     <Button
                                         type="primary"
                                         onClick={handleValidateCanvas}
+                                        loading={validationLoading}
+                                        disabled={validationLoading}
                                         style={{
                                             background: "#52c41a",
                                             borderColor: "#52c41a",
@@ -626,7 +632,7 @@ export default function Editor() {
                                             borderRadius: 6
                                         }}
                                     >
-                                        Validate
+                                        {validationLoading ? 'Validating...' : 'Validate'}
                                     </Button>
                                 </Tooltip>
 
