@@ -1,7 +1,6 @@
-import os
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
-from app.agents.config import RULESET, SYSTEM_PROMPT
+from app.agents.config import SYSTEM_PROMPT
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,9 +19,7 @@ def init_agent():
         ("human", "{canvas}")
     ])
 
-    chain = prompt | llm
-
-    _agent = chain
+    _agent = prompt | llm
 
 
 def get_agent():
