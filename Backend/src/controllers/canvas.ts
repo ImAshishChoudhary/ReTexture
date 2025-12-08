@@ -9,8 +9,8 @@ const agentBaseUrl = process.env.AGENT_BASE_URL;
 const agentEndpoints = [
     {
         key: 1,
-        url: '/process1',
-        description: 'h'
+        url: 'validate',
+        description: 'Validates the current canvas state.'
     }
 ]
 
@@ -23,15 +23,26 @@ export class chatController {
                 return res.status(400).json({ error: 'Invalid JSON body provided' });
             }
 
+            if(!requestBody.canvas) {
+                return res.status(400).json({ error: 'Canvas object not provided'})
+            }
+
             if (!agentBaseUrl) {
                 return res.status(500).json({ error: 'Agent Base URL not configured' });
             }
 
+            // let body = {
+            //     prompt: systemPrompt + requestBody,
+            // }
+
             let body = {
-                prompt: systemPrompt + requestBody,
+                canvas: requestBody.canvas
             }
 
-            const response = await fetch(agentEndpoints[0].url, {
+            const fullUrl = `${agentBaseUrl}${agentEndpoints[0].url}`;
+            console.log('Calling agent at:', fullUrl);
+
+            const response = await fetch(fullUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

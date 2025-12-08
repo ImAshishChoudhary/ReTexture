@@ -3,7 +3,7 @@ import { Stage, Layer, Line } from "react-konva";
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageContainer, ProLayout } from '@ant-design/pro-components';
-import { Button, ColorPicker, Dropdown, Flex, Tooltip, Tour, Typography } from "antd";
+import { Button, ColorPicker, Dropdown, Flex, Tooltip, Tour, Typography, Modal, Card, List, Spin } from "antd";
 
 import { setCollapsed, setEditorPages, setPopUp, setSaveTemplate, setSelectedUniqueId, setZoom } from '../redux/editorReducer';
 
@@ -157,6 +157,39 @@ export default function Editor() {
         logToConsole(serialized);
     }, [editorPages, activeIndex, canvasSize]);
 
+    const [validationResult, setValidationResult] = useState(null);
+    const [showValidationModal, setShowValidationModal] = useState(false);
+    const [validationLoading, setValidationLoading] = useState(false);
+
+    const handleValidateCanvas = async () => {
+        setValidationLoading(true);
+        const serialized = serializeToHTML(editorPages, activeIndex, canvasSize);
+        const canvasString = `${serialized.html}\n\n<style>\n${serialized.css}\n</style>`;
+        // Handle Unicode characters by converting to UTF-8 bytes first
+        const base64Canvas = btoa(unescape(encodeURIComponent(canvasString)));
+        console.log('Base64 Encoded Canvas:', base64Canvas);
+        
+        try {
+            const response = await fetch(`${import.meta.env.VITE_VALIDATION_API_URL}/process`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    canvas: base64Canvas
+                })
+            });
+            
+            const result = await response.json();
+            console.log('Validation result:', result);
+            setValidationResult(result);
+            setShowValidationModal(true);
+        } catch (error) {
+            console.error('Validation failed:', error);
+        } finally {
+            setValidationLoading(false);
+        }
+    };
 
     const handleMouseDown = useCallback((e) => {
         if (!isPenTool) return;
@@ -585,6 +618,24 @@ export default function Editor() {
 
                                 <div style={{ width: 1, height: 24, background: "#e0e0e0" }} />
 
+                                <Tooltip title="Validate Canvas">
+                                    <Button
+                                        type="primary"
+                                        onClick={handleValidateCanvas}
+                                        loading={validationLoading}
+                                        disabled={validationLoading}
+                                        style={{
+                                            background: "#52c41a",
+                                            borderColor: "#52c41a",
+                                            fontWeight: 600,
+                                            height: 36,
+                                            borderRadius: 6
+                                        }}
+                                    >
+                                        {validationLoading ? 'Validating...' : 'Validate'}
+                                    </Button>
+                                </Tooltip>
+
                                 <Tooltip title="Save Template">
                                     <Button
                                         type="primary"
@@ -696,6 +747,64 @@ export default function Editor() {
             </ProLayout>
 
             <Tour open={openTour} onClose={() => setOpenTour(false)} steps={steps} />
+            
+            <Modal
+                title="Validation Results"
+                open={showValidationModal}
+                onCancel={() => setShowValidationModal(false)}
+                width={1000}
+                footer={[
+                    <Button key="close" onClick={() => setShowValidationModal(false)}>
+                        Close
+                    </Button>
+                ]}
+            >
+                {validationResult && (
+                    <Flex vertical gap={16}>
+                        <Card title="Issues Found" size="small">
+                            <List
+                                size="small"
+                                dataSource={validationResult.issues || []}
+                                renderItem={(issue) => (
+                                    <List.Item>
+                                        <List.Item.Meta
+                                            title={<span style={{ color: '#ff4d4f' }}>{issue.type}</span>}
+                                            description={
+                                                <>
+                                                    <p><strong>Issue:</strong> {issue.message}</p>
+                                                    <p><strong>Fix:</strong> {issue.fix}</p>
+                                                </>
+                                            }
+                                        />
+                                    </List.Item>
+                                )}
+                            />
+                        </Card>
+                        
+                        <Card title="Validated HTML Preview" size="small">
+                            <div 
+                                style={{ 
+                                    border: '1px solid #d9d9d9', 
+                                    borderRadius: 4, 
+                                    padding: 16,
+                                    maxHeight: 400,
+                                    overflow: 'auto'
+                                }}
+                            >
+                                <iframe
+                                    srcDoc={validationResult.canvas}
+                                    style={{
+                                        width: '100%',
+                                        height: '400px',
+                                        border: 'none'
+                                    }}
+                                    title="Validated HTML Preview"
+                                />
+                            </div>
+                        </Card>
+                    </Flex>
+                )}
+            </Modal>
         </>
     );
 };

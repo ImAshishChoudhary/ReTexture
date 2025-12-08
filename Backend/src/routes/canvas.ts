@@ -4,7 +4,7 @@ import { chatController } from '../controllers/canvas';
 
 const router = Router();
 
-router.use(authenticateJWT);
+// router.use(authenticateJWT);
 
-router.post('/sessions', chatController.processState);
+router.post('/', chatController.processState);
 export default router;
