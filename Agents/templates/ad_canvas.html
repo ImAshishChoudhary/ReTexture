@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body { margin: 0; padding: 0; box-sizing: border-box; }
+
+      /* The Ad Container (1080x1080 for Instagram Square) */
+      .ad-container {
+          width: 1080px;
+          height: 1080px;
+          position: relative;
+          background-color: {{ bg_color }};
+          overflow: hidden;
+          font-family: sans-serif;
+      }
+
+      /* The Product Image */
+      .product-img {
+          position: absolute;
+          /* Default positioning, will be overridden by AI later */
+          bottom: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          max-height: 80%;
+          z-index: 2;
+      }
+
+      /* The Text Overlay */
+      .text-overlay {
+          position: absolute;
+          top: 100px;
+          left: 50px;
+          width: 900px;
+          z-index: 3;
+          color: {{ text_color }};
+      }
+
+      h1 { font-size: 80px; margin: 0; line-height: 1.1; }
+      h2 { font-size: 40px; margin-top: 20px; font-weight: normal; }
+
+      /* Optional: Abstract Background Shapes */
+      .circle {
+          position: absolute;
+          top: -100px;
+          right: -100px;
+          width: 600px;
+          height: 600px;
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 50%;
+          z-index: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ad-container">
+      <div class="circle"></div>
+
+      <div class="text-overlay">
+        <h1>{{ headline }}</h1>
+        <h2>{{ subheadline }}</h2>
+      </div>
+
+      <img src="{{ product_image_url }}" class="product-img" />
+    </div>
+  </body>
+</html>
