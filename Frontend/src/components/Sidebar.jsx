@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
 import { Card, Empty, Flex, Space, Typography } from 'antd';
-import { setPath } from '../redux/editorReducer';
+import { useEditorStore } from '../store/useEditorStore';
 
 
 import { GrTemplate } from "react-icons/gr";
@@ -17,11 +16,15 @@ import Texxt from './Texxt';
 import Photo from './Photo';
 import Element from './Element';
 import Upload from './Upload';
+import Generate from './Generate';
+
 import Resize from './Resize';
 import Banner from './Banner';
 import EditingPopup from './EditingPopup';
 import Layer from './Layer';
 import Shape from './Shape';
+import TescoLogo from './TescoLogo';
+
 
 
 const getIcon = (type) => {
@@ -51,24 +54,10 @@ const getIcon = (type) => {
 
 
 const Sidebar = ({ selectedEl, setElement, activePage, setPagesWithHistory, openMiniFor, stageRef }) => {
-    const dispatch = useDispatch();
-    const { path } = useSelector((state) => state?.editor ?? {});
-
-    useEffect(() => {
-        if (selectedEl !== undefined) {
-            dispatch(setPath(undefined));
-        };
-
-        if (path === undefined && selectedEl === undefined) {
-            dispatch(setPath("banner"));
-        }
-
-        if (selectedEl?.type === 'icon') {
-            dispatch(setPath("element"));
-        }
-
-
-    }, [selectedEl]);
+    const path = useEditorStore((state) => state.path) || "";
+    
+    // Normalize path - remove leading slash if present
+    const normalizedPath = path?.startsWith?.("/") ? path.slice(1) : path;
 
 
     return (
@@ -81,9 +70,9 @@ const Sidebar = ({ selectedEl, setElement, activePage, setPagesWithHistory, open
                         fontWeight: 600
                     }}>
                         <span style={{ color: "#FF6B35", display: "flex", alignItems: "center" }}>
-                            {getIcon(path || selectedEl?.type)}
+                            {getIcon(normalizedPath || selectedEl?.type)}
                         </span>
-                        {path || selectedEl?.type || "sidebar"}
+                        {normalizedPath || selectedEl?.type || "sidebar"}
                     </Flex>
                 </>
             }
@@ -99,29 +88,38 @@ const Sidebar = ({ selectedEl, setElement, activePage, setPagesWithHistory, open
                 }}
             >
                 <>
-                    {path !== undefined ? (
+                    {normalizedPath !== undefined ? (
                         <>
-                            {path === "banner" && <Banner setPagesWithHistory={setPagesWithHistory} />}
+                            {normalizedPath === "banner" && <Banner setPagesWithHistory={setPagesWithHistory} />}
 
-                            {path === "text" && <Texxt
+                            {normalizedPath === "text" && <Texxt
                                 setPagesWithHistory={setPagesWithHistory}
                                 openMiniFor={openMiniFor} />}
 
 
-                            {path === "photo" && <Photo setPagesWithHistory={setPagesWithHistory} />}
+                            {normalizedPath === "photo" && <Photo setPagesWithHistory={setPagesWithHistory} />}
 
-                            {path === "element" && <Element setPagesWithHistory={setPagesWithHistory} />}
+                            {normalizedPath === "element" && <Element setPagesWithHistory={setPagesWithHistory} />}
 
-                            {path === "shape" && <Shape
+                            {normalizedPath === "shape" && <Shape
                                 setPagesWithHistory={setPagesWithHistory}
                             />}
 
 
-                            {path === "upload" && <Upload setPagesWithHistory={setPagesWithHistory} />}
 
-                            {path === "resize" && <Resize stageRef={stageRef} />}
+                            {normalizedPath === "upload" && (
+                              <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                                <TescoLogo setPagesWithHistory={setPagesWithHistory} />
+                                <Upload setPagesWithHistory={setPagesWithHistory} />
+                              </div>
+                            )}
 
-                            {path === "layer" && <Layer
+                            {normalizedPath === "generate" && <Generate setPagesWithHistory={setPagesWithHistory} />}
+
+
+                            {normalizedPath === "resize" && <Resize stageRef={stageRef} />}
+
+                            {normalizedPath === "layer" && <Layer
                                 elements={activePage?.children || []}
                                 onToggleLock={(id) => {
                                     setElement(id, (el) => ({ ...el, locked: !el?.locked }));

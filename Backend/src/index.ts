@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import canvasRoutes from './routes/canvas'
+import generationRoutes from './routes/generation';
 import cors from 'cors';
 import path from 'path';
 
@@ -21,8 +22,12 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 app.use('/auth', authRoutes);
-app.use('/process', canvasRoutes)
+app.use('/process', canvasRoutes);
+app.use('/generate', generationRoutes);
 
 app.listen(PORT, () => {
   console.log(`[server] Listening on http://localhost:${PORT}`);

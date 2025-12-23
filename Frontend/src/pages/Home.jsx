@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { deleteTemplate } from "../redux/editorReducer";
+import { useEditorStore } from "../store/useEditorStore";
 
 import { Layout, Button, Row, Col, Typography, Card, Image, Modal, Tabs, Flex, Tooltip } from "antd";
 const { TabPane } = Tabs;
@@ -61,9 +60,8 @@ let colors = [
     "aliceblue", "salmon", "cadetblue", "blue", "cyan", "geekblue"
 ];
 export default function HomePage() {
-    const dispatch = useDispatch();
     const navigate = useNavigate();
-    const { savedTemplates } = useSelector((state) => state?.editor ?? {});
+    const { savedTemplates, deleteTemplate } = useEditorStore();
     const [open, setOpen] = useState(false);
 
     return (
@@ -454,7 +452,7 @@ export default function HomePage() {
                                                                 size={16}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    dispatch(deleteTemplate(tpl?.id));
+                                                                    deleteTemplate(tpl?.id);
                                                                 }}
                                                             />
                                                         }

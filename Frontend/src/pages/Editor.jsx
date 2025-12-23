@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Stage, Layer, Line } from "react-konva";
-import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageContainer, ProLayout } from '@ant-design/pro-components';
 import { Button, ColorPicker, Dropdown, Flex, Tooltip, Tour, Typography, Modal, Card, List, Spin } from "antd";
 
-import { setCollapsed, setEditorPages, setPopUp, setSaveTemplate, setSelectedUniqueId, setZoom } from '../redux/editorReducer';
+import { useEditorStore } from '../store/useEditorStore';
 
 import { IoDuplicateOutline, IoSaveOutline } from "react-icons/io5";
 import { HiOutlinePencil } from "react-icons/hi2";
@@ -24,11 +23,14 @@ import { serializeToHTML, logToConsole } from '../utils/serializeToHTML';
 
 export default function Editor() {
     const navigate = useNavigate();
-    const dispatch = useDispatch();
     const [searchParams] = useSearchParams();
     const tplId = searchParams.get("id");
 
-    const { path, collapsed, zoom, activeIndex, selectedUniqueId, editorPages, popup, canvasSize, savedTemplates } = useSelector((state) => state?.editor ?? {});
+    // Zustand store
+    const {
+        path, collapsed, zoom, activeIndex, selectedUniqueId, editorPages, popup, canvasSize, savedTemplates,
+        setCollapsed, setEditorPages, setPopUp, setSaveTemplate, setSelectedUniqueId, setZoom
+    } = useEditorStore();
 
 
 
@@ -113,7 +115,7 @@ export default function Editor() {
     useEffect(() => {
         if (tplId) {
             const tpl = savedTemplates?.find((t) => String(t?.id) === tplId);
-            if (tpl) dispatch(setEditorPages(tpl?.pages));
+            if (tpl) setEditorPages(tpl?.pages);
         }
     }, [tplId, savedTemplates]);
 
@@ -147,7 +149,7 @@ export default function Editor() {
         const scaleY = containerSize?.h / canvasSize?.h;
 
         const newZoom = Math.min(scaleX, scaleY) * 0.9; // keep 10% padding
-        dispatch(setZoom(newZoom));
+        setZoom(newZoom);
     }, [canvasSize, containerSize]);
 
     useEffect(() => {
@@ -230,7 +232,7 @@ export default function Editor() {
     const setPagesWithHistory = (updaterOrPages) => {
         const next = typeof updaterOrPages === "function" ? updaterOrPages(editorPages) : updaterOrPages;
         setTimeout(() => setPushHistory(next), 0);
-        dispatch(setEditorPages(next));
+        setEditorPages(next);
     };
 
     const setElement = (id, updater) => {
@@ -243,10 +245,10 @@ export default function Editor() {
     };
 
     const openMiniFor = (id) => {
-        dispatch(setSelectedUniqueId(id));
+        setSelectedUniqueId(id);
         const el = (activePage?.children || [])?.find((e) => e?.id === id);
-        if (el?.type === "text") dispatch(setPopUp(true));
-        else dispatch(setPopUp(false));
+        if (el?.type === "text") setPopUp(true);
+        else setPopUp(false);
     };
 
     const deleteSelected = () => {
@@ -258,8 +260,8 @@ export default function Editor() {
             cp[activeIndex] = page;
             return cp;
         });
-        dispatch(setSelectedUniqueId(null));
-        dispatch(setPopUp(false));
+        setSelectedUniqueId(null);
+        setPopUp(false);
     };
 
     const duplicateSelected = () => {
@@ -348,7 +350,7 @@ export default function Editor() {
                                     }
                                     return page;
                                 });
-                                setTimeout(() => dispatch(setSelectedUniqueId(newElement.id)), 0);
+                                setTimeout(() => setSelectedUniqueId(newElement.id), 0);
                                 return cp;
                             });
                         }
@@ -369,7 +371,7 @@ export default function Editor() {
                 e.preventDefault();
                 if (activePage?.children?.length > 0) {
                     const lastChild = activePage.children[activePage.children.length - 1];
-                    dispatch(setSelectedUniqueId(lastChild.id));
+                    setSelectedUniqueId(lastChild.id);
                 }
             }
 
@@ -377,19 +379,17 @@ export default function Editor() {
                 e.preventDefault();
                 if (stageRef.current) {
                     const preview = stageRef.current.toDataURL({ pixelRatio: 0.3 });
-                    dispatch(
-                        setSaveTemplate({
-                            id: Date.now(),
-                            pages: editorPages,
-                            preview,
-                        })
-                    );
+                    setSaveTemplate({
+                        id: Date.now(),
+                        pages: editorPages,
+                        preview,
+                    });
                 }
             }
 
             if (e.key === 'Escape' && selectedEl?.type !== 'text') {
-                dispatch(setSelectedUniqueId(null));
-                dispatch(setPopUp(false));
+                setSelectedUniqueId(null);
+                setPopUp(false);
             }
 
             if (selectedUniqueId && !e.ctrlKey && !e.metaKey && selectedEl?.type !== 'text') {
@@ -421,7 +421,7 @@ export default function Editor() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedUniqueId, selectedEl, deleteSelected, duplicateSelected, setPagesWithHistory, activeIndex, dispatch, activePage, setElement, editorPages, stageRef]);
+    }, [selectedUniqueId, selectedEl, deleteSelected, duplicateSelected, setPagesWithHistory, activeIndex, activePage, setElement, editorPages, stageRef, setSelectedUniqueId, setPopUp, setSaveTemplate]);
 
 
     return (
@@ -430,7 +430,7 @@ export default function Editor() {
                 {...showbtn}
                 fixSiderbar={false}
                 collapsed={path === "menubar" ? true : collapsed?.child}
-                onCollapse={(val) => dispatch(setCollapsed({ parent: true, child: val }))}
+                onCollapse={(val) => setCollapsed({ parent: true, child: val })}
                 menu={{ hideMenuWhenCollapsed: true }}
                 menuHeaderRender={false}
                 menuContentRender={() => (
@@ -505,7 +505,7 @@ export default function Editor() {
                                     <Button
                                         shape="circle"
                                         icon={<GoZoomOut size={16} />}
-                                        onClick={() => dispatch(setZoom(Math.max(0.2, zoom - 0.1)))}
+                                        onClick={() => setZoom(Math.max(0.2, zoom - 0.1))}
                                         style={{
                                             border: "1px solid #e0e0e0",
                                             color: "#1a1a1a"
@@ -527,7 +527,7 @@ export default function Editor() {
                                     <Button
                                         shape="circle"
                                         icon={<GoZoomIn size={16} />}
-                                        onClick={() => dispatch(setZoom(Math.min(3, zoom + 0.1)))}
+                                        onClick={() => setZoom(Math.min(3, zoom + 0.1))}
                                         style={{
                                             border: "1px solid #e0e0e0",
                                             color: "#1a1a1a"
@@ -539,7 +539,7 @@ export default function Editor() {
                                     <Button
                                         shape="circle"
                                         icon={<SlReload size={16} />}
-                                        onClick={() => dispatch(setZoom(1))}
+                                        onClick={() => setZoom(1)}
                                         style={{
                                             border: "1px solid #e0e0e0",
                                             color: "#1a1a1a"
@@ -643,13 +643,11 @@ export default function Editor() {
                                         onClick={() => {
                                             if (stageRef.current) {
                                                 const preview = stageRef.current.toDataURL({ pixelRatio: 0.3 });
-                                                dispatch(
-                                                    setSaveTemplate({
-                                                        id: Date.now(),
-                                                        pages: editorPages,
-                                                        preview,
-                                                    })
-                                                );
+                                                setSaveTemplate({
+                                                    id: Date.now(),
+                                                    pages: editorPages,
+                                                    preview,
+                                                });
                                             }
                                             navigate("/");
                                         }}
@@ -704,8 +702,8 @@ export default function Editor() {
                                     }}
                                     onMouseDown={(e) => {
                                         if (e.target === e.target.getStage()) {
-                                            dispatch(setSelectedUniqueId(null));
-                                            dispatch(setPopUp(false));
+                                            setSelectedUniqueId(null);
+                                            setPopUp(false);
                                         }
                                         handleMouseDown(e);
                                     }}

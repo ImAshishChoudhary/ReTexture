@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { Upload as AntUpload, Flex, Image } from "antd";
-import { setPopUp, setSelectedUniqueId, setUploadsPhotos } from "../redux/editorReducer";
+import { useEditorStore } from "../store/useEditorStore";
 
 import { CiCirclePlus } from "react-icons/ci";
 import { MdDeleteOutline } from "react-icons/md";
 
 export default function Upload({ setPagesWithHistory }) {
-  const dispatch = useDispatch();
-  const { activeIndex, canvasSize, uploadsPhotos } = useSelector((state) => state?.editor ?? {});
+  const { activeIndex, canvasSize, uploadsPhotos, setSelectedUniqueId, setPopUp, setUploadsPhotos } = useEditorStore();
   const [fileList, setFileList] = useState([]);
 
   const addImageToCanvas = ({ src, w = 300, h = 200 }) => {
@@ -45,31 +43,42 @@ export default function Upload({ setPagesWithHistory }) {
     });
 
     setTimeout(() => {
-      dispatch(setSelectedUniqueId(id));
-      dispatch(setPopUp(false));
+      setSelectedUniqueId(id);
+      setPopUp(false);
     }, 10);
   };
 
-  // Handle multiple upload
-  const handleUpload = ({ fileList: newFileList }) => {
-    const newUploads = newFileList?.map((file) => {
-      if (!file?.url && !file?.preview) {
-        file.preview = URL?.createObjectURL(file?.originFileObj);
-      }
-      return {
-        id: file?.uid,
-        url: file?.preview,
-        name: file?.name,
-      };
-    });
+  // Convert file to base64 data URL
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+  });
 
-    dispatch(setUploadsPhotos(newUploads));
+  // Handle multiple upload - convert to base64
+  const handleUpload = async ({ fileList: newFileList }) => {
+    const newUploads = await Promise.all(
+      newFileList.map(async (file) => {
+        if (!file?.url && !file?.preview) {
+          // Convert to base64 instead of blob URL
+          file.preview = await fileToBase64(file.originFileObj);
+        }
+        return {
+          id: file?.uid,
+          url: file?.preview,
+          name: file?.name,
+        };
+      })
+    );
+
+    setUploadsPhotos(newUploads);
     setFileList(newFileList);
   };
 
   const handleDelete = (id) => {
     const newUploads = uploadsPhotos?.filter((u) => u?.id !== id);
-    dispatch(setUploadsPhotos(newUploads));
+    setUploadsPhotos(newUploads);
 
     const newFileList = fileList?.filter((f) => f?.uid !== id);
     setFileList(newFileList);
@@ -92,7 +101,7 @@ export default function Upload({ setPagesWithHistory }) {
 
       <div style={{ height: "60vh", overflow: "auto" }}>
         {uploadsPhotos?.map((u) => (
-          <Flex align="center" justify="space-evenly" style={{ padding: 5 }} wrap>
+          <Flex key={u?.id} align="center" justify="space-evenly" style={{ padding: 5 }} wrap>
             <Image preview={false} alt={u?.name} src={u?.url} width={150} height={100} style={{ objectFit: "contain", cursor: "pointer" }} onClick={() => addImageToCanvas({ src: u?.url, w: 400, h: 300 })} />
             <MdDeleteOutline key="delete" color="red" size={25} onClick={() => handleDelete(u?.id)} />
           </Flex>

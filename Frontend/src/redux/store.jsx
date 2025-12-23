@@ -7,6 +7,9 @@ import editorReducer from "./editorReducer";
 const persistConfig = {
     key: "root",
     storage,
+    // Blacklist large data fields to prevent localStorage quota exceeded errors
+    // These contain base64 image data which can be several MBs
+    blacklist: ['editorPages', 'uploadsPhotos', 'generatedImages', 'savedTemplates'],
 };
 
 const persistedReducer = persistReducer(persistConfig, editorReducer);

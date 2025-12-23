@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
 import { ColorPicker, Tooltip } from "antd";
+import { useEditorStore } from "../store/useEditorStore";
 
 export default function EditorColorPicker({ setPagesWithHistory }) {
-    const { activeIndex, selectedUniqueId } = useSelector((state) => state?.editor ?? {});
+    const { activeIndex, selectedUniqueId } = useEditorStore();
     const [color, setColor] = useState("#000000");
 
     // get active object if one is selected

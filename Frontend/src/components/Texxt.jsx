@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useSelector } from "react-redux";
 import { Row, Col, Typography, Divider, Input, Button, Spin } from "antd";
+import { useEditorStore } from "../store/useEditorStore";
 
 import { RiFontSize2 } from "react-icons/ri";
 import { FaHeading } from "react-icons/fa6";
@@ -10,7 +10,7 @@ import { GoHeading } from "react-icons/go";
 const { Text } = Typography;
 
 export default function Texxt({ setPagesWithHistory, openMiniFor }) {
-    const { activeIndex, fontList } = useSelector((state) => state?.editor ?? {});
+    const { activeIndex, fontList } = useEditorStore();
 
     const loaderRef = useRef(null);
 

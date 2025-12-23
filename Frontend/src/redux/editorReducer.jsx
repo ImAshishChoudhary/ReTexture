@@ -14,6 +14,7 @@ const initialState = {
     popup: false,
     fontList: [],
     uploadsPhotos: [],
+    generatedImages: [],
     savedTemplates: [],
 };
 
@@ -53,6 +54,9 @@ const editorSlice = createSlice({
         setUploadsPhotos: (state, action) => {
             state.uploadsPhotos = action.payload;
         },
+        setGeneratedImages: (state, action) => {
+            state.generatedImages = action.payload;
+        },
         setSaveTemplate: (state, action) => {
             state.savedTemplates.push(action.payload);
         },
@@ -74,6 +78,7 @@ export const {
     setFontList,
     setCanvasSize,
     setUploadsPhotos,
+    setGeneratedImages,
     setSaveTemplate,
     deleteTemplate
 } = editorSlice.actions;

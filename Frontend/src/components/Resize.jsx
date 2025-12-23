@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { Card, InputNumber, Switch, Button, Typography, Divider, Flex } from "antd";
+import { useEditorStore } from "../store/useEditorStore";
 
-import { setCanvasSize, setEditorPages } from "../redux/editorReducer";
 import { FaInstagram } from "react-icons/fa6";
 import { LiaFacebookSquare } from "react-icons/lia";
 import { CiYoutube, CiLinkedin, CiTwitter } from "react-icons/ci";
@@ -55,8 +54,7 @@ const PRESETS = {
 
 
 export default function Resize() {
-    const dispatch = useDispatch();
-    const { canvasSize, editorPages, activeIndex } = useSelector((state) => state?.editor ?? {});
+    const { canvasSize, editorPages, activeIndex, setCanvasSize, setEditorPages } = useEditorStore();
     const [state, setState] = useState({ width: canvasSize?.w, height: canvasSize?.h, magicResize: true });
 
     const handleResize = () => {
@@ -80,14 +78,14 @@ export default function Resize() {
             };
         });
 
-        dispatch(setCanvasSize({ w: state?.width, h: state?.height }));
-        dispatch(setEditorPages(updatedPages));
+        setCanvasSize({ w: state?.width, h: state?.height });
+        setEditorPages(updatedPages);
     };
 
 
     const applyPreset = (w, h) => {
         setState((prev) => ({ ...prev, width: w, height: h }));
-        dispatch(setCanvasSize({ w, h }));
+        setCanvasSize({ w, h });
     };
 
 

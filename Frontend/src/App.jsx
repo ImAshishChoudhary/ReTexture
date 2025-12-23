@@ -1,8 +1,7 @@
 import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
 import { Spin } from "antd";
-import { setFontList } from "./redux/editorReducer.jsx";
+import { useEditorStore } from "./store/useEditorStore";
 import "./App.css";
 
 const Home = lazy(() => import("./pages/Home"));
@@ -10,20 +9,28 @@ const DashBoard = lazy(() => import("./pages/DashBoard.jsx"));
 
 
 function App() {
-  const dispatch = useDispatch();
-  const { fontList } = useSelector((state) => state?.editor ?? {});
+  const { fontList, setFontList } = useEditorStore();
 
   useEffect(() => {
     if (fontList?.length) return;
 
-    fetch(`https://www.googleapis.com/webfonts/v1/webfonts?key=${import.meta.env.VITE_GOOGLE_FONTS_KEY}&sort=popularity`)
+    const apiKey = import.meta.env.VITE_GOOGLE_FONTS_KEY;
+    
+    // Only fetch if API key is defined
+    if (!apiKey) {
+      console.warn('Google Fonts API key not configured. Skipping font list fetch.');
+      return;
+    }
+
+    fetch(`https://www.googleapis.com/webfonts/v1/webfonts?key=${apiKey}&sort=popularity`)
       .then((res) => res.json())
       .then((data) => {
-        dispatch(setFontList(data?.items || []));
+        setFontList(data?.items || []);
       })
       .catch((err) => {
+        console.error('Failed to load Google Fonts:', err);
       })
-  }, [dispatch, fontList]);
+  }, [fontList, setFontList]);
 
   return (
     <Router>

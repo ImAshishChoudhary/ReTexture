@@ -29,6 +29,9 @@ export default function SelectableImage({ shape, selected, onSelect, onChange })
                 imgRef?.current.getLayer()?.batchDraw();
             }
         };
+        previewImg.onerror = (err) => {
+            console.error("[SelectableImage] Failed to load:", shape?.id, err);
+        };
     }, [shape?.src, shape?.filters, shape?.flipX, shape?.flipY]);
 
     const applyFilters = () => {

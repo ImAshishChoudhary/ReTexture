@@ -1,21 +1,18 @@
-import { useDispatch, useSelector } from "react-redux";
 import { Button, Dropdown, Popconfirm, Flex } from "antd";
+import { useEditorStore } from "../store/useEditorStore";
 
 import { FaRegCopy } from "react-icons/fa6";
 import { BsArrowUp, BsArrowDown } from "react-icons/bs";
 import { MdOutlineDelete, MdExposurePlus1 } from "react-icons/md";
 
-import { setActiveIndex, setPopUp, setSelectedUniqueId } from "../redux/editorReducer";
-
 
 export default function AddPage({ setPagesWithHistory }) {
-    const dispatch = useDispatch();
-    const { activeIndex, editorPages } = useSelector((state) => state?.editor || {});
+    const { activeIndex, editorPages, setActiveIndex, setSelectedUniqueId, setPopUp } = useEditorStore();
 
     const handleSwitchPage = (idx) => {
-        dispatch(setActiveIndex(idx));
-        dispatch(setSelectedUniqueId(null));
-        dispatch(setPopUp(false));
+        setActiveIndex(idx);
+        setSelectedUniqueId(null);
+        setPopUp(false);
     };
 
     const addPage = () =>
@@ -24,7 +21,7 @@ export default function AddPage({ setPagesWithHistory }) {
                 ...prev,
                 { id: Date.now(), children: [], background: "#ffffff" },
             ];
-            setTimeout(() => dispatch(setActiveIndex(next?.length - 1)), 0);
+            setTimeout(() => setActiveIndex(next?.length - 1), 0);
             return next;
         });
 
@@ -37,7 +34,7 @@ export default function AddPage({ setPagesWithHistory }) {
                 id: Date.now(),
             };
             cp?.splice(idx + 1, 0, copy);
-            setTimeout(() => dispatch(setActiveIndex(idx + 1)), 0);
+            setTimeout(() => setActiveIndex(idx + 1), 0);
             return cp;
         });
 
@@ -61,7 +58,7 @@ export default function AddPage({ setPagesWithHistory }) {
             }
             
             newIndex = Math.max(0, Math.min(cp.length - 1, newIndex));
-            setTimeout(() => dispatch(setActiveIndex(newIndex)), 0);
+            setTimeout(() => setActiveIndex(newIndex), 0);
             return cp;
         });
     };
@@ -71,7 +68,7 @@ export default function AddPage({ setPagesWithHistory }) {
             if (idx <= 0) return prev;
             const cp = [...prev];
             [cp[idx - 1], cp[idx]] = [cp[idx], cp[idx - 1]];
-            setTimeout(() => dispatch(setActiveIndex(idx - 1)), 0);
+            setTimeout(() => setActiveIndex(idx - 1), 0);
             return cp;
         });
 
@@ -80,7 +77,7 @@ export default function AddPage({ setPagesWithHistory }) {
             if (idx >= prev?.length - 1) return prev;
             const cp = [...prev];
             [cp[idx + 1], cp[idx]] = [cp[idx], cp[idx + 1]];
-            setTimeout(() => dispatch(setActiveIndex(idx + 1)), 0);
+            setTimeout(() => setActiveIndex(idx + 1), 0);
             return cp;
         });
 

@@ -1,14 +1,12 @@
 import React, { useState, useMemo } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { Input } from "antd";
 import * as FaIcons from "react-icons/fa";
 import * as MdIcons from "react-icons/md";
 import * as AiIcons from "react-icons/ai";
-import { setPopUp, setSelectedUniqueId } from "../redux/editorReducer";
+import { useEditorStore } from "../store/useEditorStore";
 
 export default function Element({ setPagesWithHistory }) {
-    const dispatch = useDispatch();
-    const { activeIndex } = useSelector((state) => state?.editor ?? {});
+    const { activeIndex, setSelectedUniqueId, setPopUp } = useEditorStore();
 
     const [search, setSearch] = useState("");
 
@@ -61,8 +59,8 @@ export default function Element({ setPagesWithHistory }) {
             return cp;
         });
 
-        dispatch(setSelectedUniqueId(id));
-        dispatch(setPopUp(false));
+        setSelectedUniqueId(id);
+        setPopUp(false);
     };
 
     return (

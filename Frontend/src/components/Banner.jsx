@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Row, Col, Image, Space, Skeleton } from "antd";
 import { Stage, Layer, Rect, Text, Image as KonvaImage } from "react-konva";
-import { useDispatch, useSelector } from "react-redux";
+import { useEditorStore } from "../store/useEditorStore";
 
 import tea from "../assets/tea.png";
 import banner7 from "../assets/banner-7.png";
@@ -740,8 +740,7 @@ function KonvaImg({ el }) {
 
 
 export default function BannerList({ setPagesWithHistory }) {
-    const dispatch = useDispatch();
-    const { activeIndex } = useSelector((state) => state?.editor ?? {});
+    const { activeIndex, setSelectedUniqueId, setPopUp } = useEditorStore();
     const stageRefs = useRef([]);
     const [thumbs, setThumbs] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -772,8 +771,8 @@ export default function BannerList({ setPagesWithHistory }) {
             cp[activeIndex] = { ...(cp[activeIndex] || {}), children, background: template?.background };
             return cp;
         });
-        dispatch(setSelectedUniqueId(null));
-        dispatch(setPopUp(false));
+        setSelectedUniqueId(null);
+        setPopUp(false);
     };
 
     return (

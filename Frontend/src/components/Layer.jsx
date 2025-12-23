@@ -1,14 +1,12 @@
-import { useDispatch, useSelector } from "react-redux";
 import { Button, Empty, message, Tooltip, Typography } from "antd";
 import { DragSortTable } from "@ant-design/pro-components";
+import { useEditorStore } from "../store/useEditorStore";
 
 import { TbTextSize } from "react-icons/tb";
 import { HiOutlinePhoto } from "react-icons/hi2";
 import { LiaShapesSolid } from "react-icons/lia";
 import { IoEyeOffOutline ,IoEyeOutline} from "react-icons/io5";
 import { CiLock ,CiUnlock} from "react-icons/ci";
-
-import { setSelectedUniqueId } from "../redux/editorReducer";
 
 const getIcon = (type) => {
     switch (type) {
@@ -24,8 +22,7 @@ const getIcon = (type) => {
 };
 
 export default function Layer({ elements = [], onToggleLock, onToggleVisibility, onReorder }) {
-    const dispatch = useDispatch();
-    const { selectedUniqueId } = useSelector((state) => state?.editor ?? {});
+    const { selectedUniqueId, setSelectedUniqueId } = useEditorStore();
     const [messageApi, contextHolder] = message.useMessage();
 
 
@@ -48,7 +45,7 @@ export default function Layer({ elements = [], onToggleLock, onToggleVisibility,
                             fontWeight: selectedUniqueId === record?.id ? 600 : 400,
                             color: selectedUniqueId === record?.id ? "#1890ff" : "inherit",
                         }}
-                        onClick={() => dispatch(setSelectedUniqueId(record?.id))}
+                        onClick={() => setSelectedUniqueId(record?.id)}
                     >
                         {getIcon(record?.type)}
                         <Typography.Text ellipsis={{ tooltip: record?.text || record?.type || record?.id }}>

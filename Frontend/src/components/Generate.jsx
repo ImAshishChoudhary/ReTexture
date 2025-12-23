@@ -1,0 +1,519 @@
+import { useState } from "react";
+import { Button, message, Input, Divider, Flex, Image, Skeleton } from "antd";
+import { useEditorStore } from "../store/useEditorStore";
+
+import { CiCirclePlus } from "react-icons/ci";
+import { MdAutoAwesome } from "react-icons/md";
+
+// Direct Agent API
+const AGENT_URL = "http://localhost:8000";
+
+export default function Generate({ setPagesWithHistory }) {
+  const { 
+    activeIndex, 
+    canvasSize, 
+    editorPages,
+    selectedUniqueId 
+  } = useEditorStore();
+  
+  const [processing, setProcessing] = useState(false);
+  const [generatingVariations, setGeneratingVariations] = useState(false);
+  const [userprompt, setUserprompt] = useState("");
+  const [variations, setVariations] = useState([]);
+  const [loadingStyles, setLoadingStyles] = useState([]); // Track which styles are loading
+
+  // Get selected element from current page
+  const activePage = editorPages?.[activeIndex] || { children: [] };
+  const selectedEl = activePage?.children?.find((el) => el?.id === selectedUniqueId);
+
+  // Convert blob/http URL to base64
+  const urlToBase64 = async (url) => {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  // Get base64 data without prefix
+  const getBase64Data = (dataUrl) => {
+    return dataUrl.split(",")[1];
+  };
+
+  // Replace selected image on canvas
+  const replaceSelectedImage = (src) => {
+    const originalId = selectedEl.id;
+    setPagesWithHistory((prev) => {
+      const cp = JSON.parse(JSON.stringify(prev));
+      const page = cp[activeIndex];
+      if (page?.children) {
+        const idx = page.children.findIndex((el) => el.id === originalId);
+        if (idx !== -1) {
+          page.children[idx] = { ...page.children[idx], src };
+        }
+      }
+      return cp;
+    });
+  };
+
+  // Handle remove background (direct Agent API)
+  const handleRemoveBackground = async () => {
+    console.log("=".repeat(60));
+    console.log("[FRONTEND DEBUG] handleRemoveBackground called");
+    console.log("=".repeat(60));
+    
+    console.log("[FRONTEND DEBUG] Selected element:", selectedEl);
+    console.log("[FRONTEND DEBUG] Selected element type:", selectedEl?.type);
+    console.log("[FRONTEND DEBUG] Selected element src exists:", !!selectedEl?.src);
+    
+    if (!selectedEl?.src || selectedEl?.type !== "image") {
+      console.log("[FRONTEND DEBUG] No valid image selected - aborting");
+      message.warning("Please select an image first");
+      return;
+    }
+
+    setProcessing(true);
+    message.loading({ content: "🔄 Removing background...", key: "gen", duration: 0 });
+
+    try {
+      let imageSrc = selectedEl.src;
+      console.log("[FRONTEND DEBUG] Original image src type:", imageSrc.substring(0, 30) + "...");
+      
+      // Convert to base64 if needed
+      if (imageSrc.startsWith("blob:") || imageSrc.startsWith("http")) {
+        console.log("[FRONTEND DEBUG] Converting blob/http URL to base64...");
+        imageSrc = await urlToBase64(imageSrc);
+        console.log("[FRONTEND DEBUG] Conversion complete, new src type:", imageSrc.substring(0, 30) + "...");
+      }
+      
+      if (!imageSrc.startsWith("data:")) {
+        console.log("[FRONTEND DEBUG] ERROR: Invalid image format after conversion");
+        throw new Error("Invalid image format");
+      }
+
+      // Extract base64 data
+      const base64Data = getBase64Data(imageSrc);
+      console.log("[FRONTEND DEBUG] Base64 data length:", base64Data.length);
+
+      // Call Agent's /remove-bg with file_path (actually base64 in JSON)
+      // Agent accepts file upload, so we need to use FormData
+      console.log("[FRONTEND DEBUG] Creating blob from data URL...");
+      const blob = await fetch(imageSrc).then(r => r.blob());
+      console.log("[FRONTEND DEBUG] Blob created, size:", blob.size, "type:", blob.type);
+      
+      const formData = new FormData();
+      formData.append("file", blob, "image.png");
+      console.log("[FRONTEND DEBUG] FormData created with file");
+
+      console.log("[FRONTEND DEBUG] Calling Agent API:", `${AGENT_URL}/remove-bg`);
+      console.log("[FRONTEND DEBUG] Sending POST request...");
+      
+      const response = await fetch(`${AGENT_URL}/remove-bg`, {
+        method: "POST",
+        body: formData,
+      });
+
+      console.log("[FRONTEND DEBUG] Response received:");
+      console.log("[FRONTEND DEBUG] - Status:", response.status);
+      console.log("[FRONTEND DEBUG] - StatusText:", response.statusText);
+      console.log("[FRONTEND DEBUG] - OK:", response.ok);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.log("[FRONTEND DEBUG] ERROR response body:", errorData);
+        throw new Error(errorData.detail || `API Error: ${response.status}`);
+      }
+
+      console.log("[FRONTEND DEBUG] Parsing JSON response...");
+      const result = await response.json();
+      console.log("[FRONTEND DEBUG] Response parsed:");
+      console.log("[FRONTEND DEBUG] - success:", result.success);
+      console.log("[FRONTEND DEBUG] - has image_data:", !!result.image_data);
+      console.log("[FRONTEND DEBUG] - image_data length:", result.image_data?.length || 0);
+      console.log("[FRONTEND DEBUG] - format:", result.format);
+      
+      if (!result.success || !result.image_data) {
+        console.log("[FRONTEND DEBUG] ERROR: No valid image data in response");
+        throw new Error("No image data returned");
+      }
+
+      // Convert base64 to data URL
+      const dataUrl = `data:image/png;base64,${result.image_data}`;
+      console.log("[FRONTEND DEBUG] Created data URL, length:", dataUrl.length);
+      
+      console.log("[FRONTEND DEBUG] Replacing selected image on canvas...");
+      replaceSelectedImage(dataUrl);
+      
+      console.log("=".repeat(60));
+      console.log("[FRONTEND DEBUG] Background removal SUCCESS!");
+      console.log("=".repeat(60));
+      message.success({ content: "✅ Background removed!", key: "gen", duration: 2 });
+
+    } catch (error) {
+      console.log("=".repeat(60));
+      console.log("[FRONTEND DEBUG] ERROR in handleRemoveBackground:");
+      console.log("[FRONTEND DEBUG] - Error type:", error.name);
+      console.log("[FRONTEND DEBUG] - Error message:", error.message);
+      console.log("[FRONTEND DEBUG] - Full error:", error);
+      console.log("=".repeat(60));
+      console.error("Remove BG error:", error);
+      message.error({ content: error.message || "Failed", key: "gen", duration: 4 });
+    } finally {
+      console.log("[FRONTEND DEBUG] handleRemoveBackground finished, setting processing=false");
+      setProcessing(false);
+    }
+  };
+
+  // Handle generate variations (STREAMING - displays each image as it's generated)
+  const handleGenerateVariations = async () => {
+    console.log("=".repeat(60));
+    console.log("[FRONTEND] 🚀 handleGenerateVariations STREAMING started");
+    console.log("=".repeat(60));
+    
+    if (!selectedEl?.src || selectedEl?.type !== "image") {
+      console.log("[FRONTEND] ❌ No image selected");
+      message.warning("Please select an image first");
+      return;
+    }
+
+    console.log("[FRONTEND] Setting state: generatingVariations=true, variations=[]");
+    setGeneratingVariations(true);
+    setVariations([]); // Clear previous variations
+    setLoadingStyles(["Studio", "Lifestyle", "Creative"]); // Show all 3 loading placeholders
+    message.loading({ content: "🎨 Starting AI generation...", key: "var", duration: 0 });
+
+    try {
+      let imageSrc = selectedEl.src;
+      console.log("[FRONTEND] Image src type:", imageSrc.substring(0, 30));
+      
+      // Convert to base64 if needed
+      if (imageSrc.startsWith("blob:") || imageSrc.startsWith("http")) {
+        console.log("[FRONTEND] Converting blob/http to base64...");
+        imageSrc = await urlToBase64(imageSrc);
+        console.log("[FRONTEND] Conversion done");
+      }
+      
+      if (!imageSrc.startsWith("data:")) {
+        throw new Error("Invalid image format");
+      }
+
+      // First remove background
+      console.log("[FRONTEND] Step 1: Calling /remove-bg...");
+      const blob = await fetch(imageSrc).then(r => r.blob());
+      console.log("[FRONTEND] Blob size:", blob.size);
+      const formData = new FormData();
+      formData.append("file", blob, "image.png");
+
+      const bgResponse = await fetch(`${AGENT_URL}/remove-bg`, {
+        method: "POST",
+        body: formData,
+      });
+      console.log("[FRONTEND] /remove-bg response status:", bgResponse.status);
+
+      if (!bgResponse.ok) {
+        const errorData = await bgResponse.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Background removal failed");
+      }
+
+      const bgResult = await bgResponse.json();
+      console.log("[FRONTEND] Background removed! image_data length:", bgResult.image_data?.length);
+      
+      // Now use streaming endpoint
+      console.log("=".repeat(60));
+      console.log("[FRONTEND] Step 2: Calling /generate/variations/stream...");
+      console.log("[FRONTEND] Concept:", userprompt || "product photography");
+      message.loading({ content: "🎨 Generating variations (streaming)...", key: "var", duration: 0 });
+
+      const response = await fetch(`${AGENT_URL}/generate/variations/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_data: bgResult.image_data,
+          concept: userprompt || "product photography"
+        }),
+      });
+      console.log("[FRONTEND] Stream response status:", response.status);
+      console.log("[FRONTEND] Stream response ok:", response.ok);
+
+      if (!response.ok) {
+        throw new Error(`Stream failed: ${response.status}`);
+      }
+
+      // Read SSE stream with BUFFERING to handle large chunked data
+      console.log("[FRONTEND] 📡 Starting to read SSE stream with buffering...");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const styleNames = ["Studio", "Lifestyle", "Creative"];
+      let buffer = ""; // Buffer for incomplete events
+      let chunkCount = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        chunkCount++;
+        console.log(`[FRONTEND] 📦 Chunk ${chunkCount}: done=${done}, bytes=${value?.length || 0}`);
+        
+        if (done) {
+          console.log("[FRONTEND] ✅ Stream ended");
+          break;
+        }
+
+        // Append new data to buffer
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete SSE events (they end with \n\n)
+        const events = buffer.split("\n\n");
+        // Keep the last incomplete event in the buffer
+        buffer = events.pop() || "";
+        
+        console.log(`[FRONTEND] Processing ${events.length} complete events, buffer remaining: ${buffer.length} chars`);
+
+        for (const event of events) {
+          if (!event.trim()) continue;
+          
+          const lines = event.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const jsonStr = line.slice(6);
+              console.log(`[FRONTEND] 📨 Parsing SSE data (${jsonStr.length} chars)`);
+              
+              try {
+                const data = JSON.parse(jsonStr);
+                console.log("[FRONTEND] 📨 Event type:", data.type, "index:", data.index);
+
+                if (data.type === 'progress') {
+                  console.log(`[FRONTEND] 🔄 Generating ${styleNames[data.index]} style...`);
+                  message.loading({ 
+                    content: `🎨 Generating ${styleNames[data.index]} style...`, 
+                    key: "var", 
+                    duration: 0 
+                  });
+                }
+
+                if (data.type === 'variation' && data.data) {
+                  console.log(`[FRONTEND] ✅ VARIATION ${data.index + 1} RECEIVED! Data: ${data.data.length} chars`);
+                  const newVariation = {
+                    id: `var${Date.now()}_${data.index}`,
+                    url: `data:image/png;base64,${data.data}`,
+                    name: styleNames[data.index] || `Variation ${data.index + 1}`
+                  };
+                  
+                  // Remove from loading styles
+                  setLoadingStyles(prev => prev.filter(s => s !== styleNames[data.index]));
+                  
+                  // Add to variations immediately (streaming!)
+                  setVariations(prev => {
+                    console.log(`[FRONTEND] 📊 Adding variation ${data.index + 1}, prev count: ${prev.length}`);
+                    return [...prev, newVariation];
+                  });
+                  
+                  message.success({ 
+                    content: `✅ ${styleNames[data.index]} ready!`, 
+                    key: `var-${data.index}`, 
+                    duration: 2 
+                  });
+                }
+
+                if (data.type === 'error') {
+                  console.log(`[FRONTEND] ❌ Error for variation ${data.index}:`, data.message);
+                  // Remove failed style from loading
+                  if (data.index !== undefined) {
+                    setLoadingStyles(prev => prev.filter(s => s !== styleNames[data.index]));
+                  }
+                }
+
+                if (data.type === 'complete') {
+                  console.log("[FRONTEND] 🎉 All variations complete!");
+                  setLoadingStyles([]); // Clear any remaining loading states
+                  message.success({ content: "✨ All variations generated!", key: "var", duration: 3 });
+                }
+              } catch (e) {
+                console.log("[FRONTEND] ⚠️ JSON parse error:", e.message, "- Data length:", jsonStr.length);
+              }
+            }
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error("[FRONTEND] ❌ Error:", error);
+      message.error({ content: error.message || "Failed to generate", key: "var", duration: 4 });
+    } finally {
+      console.log("[FRONTEND] 🏁 Generation complete, setting generatingVariations=false");
+      setGeneratingVariations(false);
+      setLoadingStyles([]); // Clear any remaining loading states
+    }
+  };
+
+  const isImageSelected = selectedEl?.type === "image";
+
+  return (
+    <>
+      <p style={{ fontSize: 12, color: "#666", margin: "0 0 10px 0" }}>
+        Select an image on canvas to use AI features:
+      </p>
+
+      {/* Remove Background */}
+      <Button
+        type="primary"
+        block
+        size="large"
+        loading={processing}
+        disabled={!isImageSelected || generatingVariations}
+        onClick={handleRemoveBackground}
+        icon={<CiCirclePlus size={20} />}
+        style={{
+          height: 44,
+          fontWeight: 600,
+          fontSize: 14,
+          background: isImageSelected ? "linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)" : "#d9d9d9",
+          border: "none",
+          borderRadius: 8,
+          marginBottom: 8,
+        }}
+      >
+        {processing ? "Processing..." : "🎯 Remove Background"}
+      </Button>
+
+      <Divider style={{ margin: "12px 0", borderColor: "#eee" }}>Generate Variations</Divider>
+
+      {/* Theme input (optional) */}
+      <Input
+        placeholder="Theme (e.g., summer beach, luxury, minimal) - optional"
+        value={userprompt}
+        onChange={(e) => setUserprompt(e.target.value)}
+        style={{ marginBottom: 8, borderRadius: 8 }}
+        disabled={!isImageSelected}
+      />
+
+      {/* Generate Variations Button */}
+      <Button
+        type="primary"
+        block
+        size="large"
+        loading={generatingVariations}
+        disabled={!isImageSelected || processing}
+        onClick={handleGenerateVariations}
+        icon={<MdAutoAwesome size={18} />}
+        style={{
+          height: 44,
+          fontWeight: 600,
+          fontSize: 14,
+          background: isImageSelected ? "linear-gradient(135deg, #f97316 0%, #fb923c 100%)" : "#d9d9d9",
+          border: "none",
+          borderRadius: 8,
+          marginBottom: 12,
+        }}
+      >
+        {generatingVariations ? "Generating..." : "✨ Generate Variations"}
+      </Button>
+
+      {/* Variations Gallery */}
+      <div style={{ 
+        height: "30vh", 
+        overflow: "auto", 
+        background: "#f9f9f9", 
+        borderRadius: 8, 
+        padding: 8 
+      }}>
+        {variations.length === 0 && loadingStyles.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 16, color: "#999" }}>
+            <p style={{ margin: 0, fontSize: 13 }}>No variations yet</p>
+            <p style={{ fontSize: 11, marginTop: 4 }}>
+              Select image → Enter theme (optional) → Click Generate
+            </p>
+          </div>
+        ) : (
+          <Flex wrap="wrap" justify="center" gap={8}>
+            {/* Show generated variations */}
+            {variations.map((v) => (
+              <div 
+                key={v.id} 
+                style={{ 
+                  cursor: "pointer", 
+                  textAlign: "center",
+                  border: "2px solid transparent",
+                  borderRadius: 8,
+                  padding: 4,
+                  transition: "all 0.3s ease",
+                  animation: "fadeIn 0.5s ease-out",
+                }}
+                onClick={() => {
+                  replaceSelectedImage(v.url);
+                  message.success("Image replaced on canvas!");
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = "#7c3aed"}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = "transparent"}
+              >
+                <Image
+                  preview={false}
+                  alt={v.name}
+                  src={v.url}
+                  width={100}
+                  height={100}
+                  style={{ objectFit: "cover", borderRadius: 6 }}
+                />
+                <p style={{ fontSize: 10, margin: "4px 0 0", color: "#666" }}>{v.name}</p>
+              </div>
+            ))}
+            
+            {/* Show loading skeletons for pending styles */}
+            {loadingStyles.map((styleName) => (
+              <div 
+                key={`loading-${styleName}`}
+                style={{ 
+                  textAlign: "center",
+                  padding: 4,
+                  position: "relative",
+                }}
+              >
+                <div style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: 6,
+                  background: "linear-gradient(90deg, #e8e8e8 25%, #f5f5f5 50%, #e8e8e8 75%)",
+                  backgroundSize: "200% 100%",
+                  animation: "shimmer 1.5s infinite",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  <span style={{ 
+                    fontSize: 20, 
+                    animation: "pulse 1s infinite",
+                  }}>🎨</span>
+                </div>
+                <p style={{ 
+                  fontSize: 10, 
+                  margin: "4px 0 0", 
+                  color: "#f97316",
+                  fontWeight: 600,
+                }}>
+                  {styleName}...
+                </p>
+              </div>
+            ))}
+          </Flex>
+        )}
+        
+        {/* CSS Animations */}
+        <style>{`
+          @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+          }
+        `}</style>
+      </div>
+    </>
+  );
+}

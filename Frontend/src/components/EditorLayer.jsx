@@ -1,7 +1,6 @@
 import { Group } from "react-konva";
 import { useKonvaSnapping } from 'use-konva-snapping';
-import { useDispatch, useSelector } from 'react-redux';
-import { setPopUp, setSelectedUniqueId } from '../redux/editorReducer';
+import { useEditorStore } from '../store/useEditorStore';
 
 import SelectableText from '../react-konva/SelectableText';
 import SelectableRect from '../react-konva/SelectableRect';
@@ -17,8 +16,7 @@ import SelectablePolygon from '../react-konva/SelectablePolygon';
 const EditorLayer = ({ el, setElement, stageRef }) => {
     if (!el) return null;
 
-    const dispatch = useDispatch();
-    const { selectedUniqueId } = useSelector((state) => state?.editor ?? {});
+    const { selectedUniqueId, setSelectedUniqueId, setPopUp } = useEditorStore();
 
 
     const { handleDragging, handleDragEnd } = useKonvaSnapping({
@@ -42,8 +40,8 @@ const EditorLayer = ({ el, setElement, stageRef }) => {
     // };
 
     function handleOnes(id) {
-        dispatch(setSelectedUniqueId(id));
-        dispatch(setPopUp(false));
+        setSelectedUniqueId(id);
+        setPopUp(false);
     };
 
     if (el?.type === "text") {

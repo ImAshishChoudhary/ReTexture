@@ -1,5 +1,5 @@
-import { useSelector } from "react-redux";
 import { Col, Row } from "antd";
+import { useEditorStore } from "../store/useEditorStore";
 
 import { GiSquare } from "react-icons/gi";
 import { LiaCircleSolid } from "react-icons/lia";
@@ -10,7 +10,7 @@ import { HiArrowRight } from "react-icons/hi2";
 import { BiPolygon } from "react-icons/bi";
 
 export default function Shape({ setPagesWithHistory }) {
-    const { activeIndex } = useSelector((state) => state.editor ?? {});
+    const activeIndex = useEditorStore((state) => state.activeIndex);
 
     const shapeDefaults = {
         rect: {

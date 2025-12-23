@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useSelector, useDispatch } from "react-redux";
 import { message } from "antd";
-import { setPopUp, setSelectedUniqueId } from "../redux/editorReducer";
+import { useEditorStore } from "../store/useEditorStore";
 
 import photo1 from "../assets/photo1.avif";
 import photo2 from "../assets/photo2.avif";
@@ -17,8 +16,7 @@ import photo10 from "../assets/photo10.avif";
 
 
 export default function Photo({ setPagesWithHistory }) {
-    const dispatch = useDispatch();
-    const { activeIndex, canvasSize } = useSelector((state) => state?.editor ?? {});
+    const { activeIndex, canvasSize, setSelectedUniqueId, setPopUp } = useEditorStore();
 
     const [galleryPhotos, setGalleryPhotos] = useState([photo1, photo2, photo3, photo4, photo5, photo6, photo7, photo8, photo9, photo10]);
     const [galleryPage, setGalleryPage] = useState(1);
@@ -75,8 +73,8 @@ export default function Photo({ setPagesWithHistory }) {
         });
 
         message.success("Image added successfully!");
-        dispatch(setSelectedUniqueId(id));
-        dispatch(setPopUp(false));
+        setSelectedUniqueId(id);
+        setPopUp(false);
     };
 
     const handleAddGalleryImage = (photo, sizeW = 800) => {

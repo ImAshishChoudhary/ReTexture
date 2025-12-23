@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
 import { ProLayout } from '@ant-design/pro-components';
 import { Image, message } from 'antd';
 
-import { setCollapsed, setPath } from '../redux/editorReducer';
+import { useEditorStore } from '../store/useEditorStore';
 
 import { RxText } from "react-icons/rx";
 import { BsWindowSidebar } from "react-icons/bs";
@@ -52,6 +51,12 @@ const routes = [
     icon: <IoCloudUploadOutline size={22} />,
   },
   {
+    path: 'generate',
+    name: 'Gen AI',
+    icon: <span style={{ fontSize: '20px' }}>✨</span>,
+  },
+
+  {
     path: 'layer',
     name: 'Layer',
     icon: <SlLayers size={19} />,
@@ -66,8 +71,7 @@ const routes = [
 
 export default () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const { path, collapsed } = useSelector((state) => state?.editor ?? {});
+  const { path, collapsed, setCollapsed, setPath } = useEditorStore();
   const [messageApi, contextHolder] = message.useMessage();
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 1000);
@@ -82,14 +86,14 @@ export default () => {
   }, []);
 
   function handleMenuClick(path) {
-    dispatch(setCollapsed({ parent: true, child: false }));
-    dispatch(setPath(path));
+    setCollapsed({ parent: true, child: false });
+    setPath(path);
   }
 
 
   function handleMenuBar() {
-    dispatch(setCollapsed({ parent: !collapsed.parent, child: true }));
-    dispatch(setPath("menubar"));
+    setCollapsed({ parent: !collapsed.parent, child: true });
+    setPath("menubar");
   };
 
 
@@ -104,7 +108,7 @@ export default () => {
     fixSiderbar: true,
     collapsedButtonRender: false,
     menuItemRender: (item, dom) => (
-      <div onClick={() => handleMenuClick(item?.name?.toLowerCase())}>
+      <div onClick={() => handleMenuClick(item?.path)}>
         {dom}
       </div>
     ),
@@ -151,7 +155,7 @@ export default () => {
       <ProLayout
         {...props}
         layout={isMobile ? 'top' : "mix"}
-        onCollapse={(val) => dispatch(setCollapsed({ parent: val, child: true }))}
+        onCollapse={(val) => setCollapsed({ parent: val, child: true })}
         postMenuData={(menuData) => {
           return [
             {

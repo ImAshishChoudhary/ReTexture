@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useDispatch } from 'react-redux';
 import { Button, Tooltip } from 'antd';
 import { LuUndo } from "react-icons/lu";
 import { LuRedo } from "react-icons/lu";
-import { setEditorPages } from '../redux/editorReducer';
+import { useEditorStore } from '../store/useEditorStore';
 
 
 export default function UndoRedo({ pushHistory, undoRedoRef }) {
-    const dispatch = useDispatch();
+    const setEditorPages = useEditorStore((state) => state.setEditorPages);
 
     const [canUndo, setCanUndo] = useState(false);
     const [canRedo, setCanRedo] = useState(false);
@@ -39,7 +38,7 @@ export default function UndoRedo({ pushHistory, undoRedoRef }) {
         const snap = historyRef?.current[newIndex];
         historyIndexRef.current = newIndex;
         suppressPushRef.current = true;
-        dispatch(setEditorPages(snap));
+        setEditorPages(snap);
         setCanUndo(newIndex > 0);
         setCanRedo(true);
         setTimeout(() => (suppressPushRef.current = false), 0);
@@ -51,7 +50,7 @@ export default function UndoRedo({ pushHistory, undoRedoRef }) {
         const snap = historyRef?.current[newIndex];
         historyIndexRef.current = newIndex;
         suppressPushRef.current = true;
-        dispatch(setEditorPages(snap));
+        setEditorPages(snap);
         setCanUndo(true);
         setCanRedo(newIndex < historyRef?.current?.length - 1);
         setTimeout(() => (suppressPushRef.current = false), 0);
