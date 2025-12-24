@@ -1,0 +1,409 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 100%;
+
+    --radius: 0.5rem;
+    
+    /* Tesco Brand Colors */
+    --tesco-blue: 210 100% 35%;
+    --tesco-red: 0 84% 50%;
+    --tesco-yellow: 45 100% 51%;
+    
+    /* Editor specific */
+    --editor-bg: 220 15% 8%;
+    --editor-surface: 220 15% 12%;
+    --editor-border: 220 15% 18%;
+    --editor-accent: 210 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-black text-white antialiased;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+}
+
+/* Custom Cursor */
+.cursor-none,
+.cursor-none * {
+  cursor: none !important;
+}
+
+/* Grid Background */
+.grid-background {
+  background-image: 
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Gradient Mesh */
+.gradient-mesh {
+  background: 
+    radial-gradient(ellipse at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, rgba(74, 222, 222, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgba(255, 119, 198, 0.08) 0%, transparent 50%);
+}
+
+/* Editor Background */
+.editor-grid-bg {
+  background-color: hsl(var(--editor-bg));
+  background-image: 
+    radial-gradient(circle at 25px 25px, hsl(var(--editor-border)) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Glass Effects */
+.glass-panel {
+  background: rgba(15, 15, 20, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-modal {
+  background: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Editor Sidebar */
+.editor-sidebar {
+  background: #0a0a0c;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.editor-sidebar-item {
+  @apply relative flex flex-col items-center justify-center py-2.5 px-2 transition-all duration-150;
+}
+
+.editor-sidebar-item.active {
+  @apply text-white;
+}
+
+.editor-sidebar-item:not(.active) {
+  @apply text-neutral-500 hover:text-neutral-300;
+}
+
+/* Editor Tool Panel */
+.editor-tool-panel {
+  background: #0c0c0e;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Editor Navbar */
+.editor-navbar {
+  background: #0a0a0c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Editor Canvas Area */
+.editor-canvas-area {
+  background: hsl(220 20% 6%);
+  background-image: 
+    radial-gradient(circle at 50% 50%, hsl(220 20% 12%) 0%, transparent 70%);
+}
+
+/* Smooth Transitions */
+.transition-smooth {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Button Styles */
+.btn-editor {
+  @apply h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200;
+  @apply bg-white/10 text-white hover:bg-white/20;
+  @apply border border-white/10 hover:border-white/20;
+}
+
+.btn-editor-primary {
+  @apply h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200;
+  background: linear-gradient(135deg, hsl(210 100% 50%) 0%, hsl(210 100% 40%) 100%);
+  @apply text-white hover:opacity-90;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.25);
+}
+
+.btn-editor-accent {
+  @apply h-9 px-4 rounded-lg text-sm font-medium transition-all duration-200;
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  @apply text-white hover:opacity-90;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25);
+}
+
+/* Compliance Indicator */
+.compliance-badge {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+}
+
+.compliance-badge.valid {
+  @apply bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+}
+
+.compliance-badge.warning {
+  @apply bg-amber-500/20 text-amber-400 border border-amber-500/30;
+}
+
+.compliance-badge.error {
+  @apply bg-red-500/20 text-red-400 border border-red-500/30;
+}
+
+/* Animations */
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
+}
+
+.modal-animate {
+  animation: modalIn 0.2s ease-out;
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.25s ease-out;
+}
+
+.slide-in-right {
+  animation: slideInRight 0.25s ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Format Card */
+.format-card {
+  transition: all 0.2s ease;
+}
+
+.format-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Color Picker */
+.circle-picker {
+  width: auto !important;
+}
+
+.chrome-picker {
+  width: auto !important;
+  box-shadow: none !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden !important;
+}
+
+/* Scrollbar Styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Tool Tooltip */
+.tool-tooltip {
+  @apply absolute left-full ml-2 px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap;
+  @apply bg-white text-neutral-900 opacity-0 pointer-events-none transition-all duration-150;
+  @apply -translate-x-1;
+}
+
+.tool-trigger:hover .tool-tooltip {
+  @apply opacity-100 translate-x-0;
+}
+
+/* AI Feature Badge */
+.ai-badge {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #c084fc;
+}
+
+/* Retail Format Preview */
+.format-preview {
+  @apply relative rounded-lg overflow-hidden;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.format-preview::after {
+  content: '';
+  @apply absolute inset-0;
+  background: linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* Status Indicator */
+.status-dot {
+  @apply w-2 h-2 rounded-full;
+}
+
+.status-dot.online {
+  @apply bg-emerald-500;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.status-dot.syncing {
+  @apply bg-blue-500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Export Button Glow */
+.export-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.export-btn::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: inherit;
+  z-index: -1;
+}
+
+.export-btn:hover::before {
+  opacity: 1;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Zoom Controls */
+.zoom-control {
+  @apply flex items-center gap-1 px-1 py-0.5 rounded-lg;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Canvas Workspace */
+.canvas-workspace {
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Toolbar Divider */
+.toolbar-divider {
+  @apply w-px h-5 bg-white/10 mx-2;
+}
+
+/* Hide Scrollbar */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
