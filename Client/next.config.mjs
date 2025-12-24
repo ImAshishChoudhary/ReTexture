@@ -31,6 +31,7 @@ const nextConfig = {
     "@imgly/background-removal",
     "onnxruntime-node",
     "sharp",
+    "fabric", // Fabric.js requires jsdom on server - externalize to avoid bundling issues
   ],
 
   // Webpack configuration for handling onnxruntime-web
@@ -43,7 +44,16 @@ const nextConfig = {
         path: false,
         crypto: false,
         module: false,
+        jsdom: false, // Fabric.js tries to require jsdom on server, ignore on client
       };
+    }
+
+    if (isServer) {
+      // Server-side: externalize fabric to prevent jsdom resolution issues
+      config.externals = config.externals || [];
+      config.externals.push({
+        fabric: "commonjs fabric",
+      });
     }
 
     // Handle WASM files
@@ -51,6 +61,12 @@ const nextConfig = {
       test: /\.wasm$/,
       type: "asset/resource",
     });
+
+    // Ignore jsdom - fabric.js tries to require it but we don't need it in browser
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      jsdom: false,
+    };
 
     return config;
   },

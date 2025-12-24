@@ -1,14 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Loader, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useRef, use } from "react";
 
 import { useGetProject } from "@/features/projects/api/use-get-project";
 
-import { Editor } from "@/features/editor/components/editor";
 import { Button } from "@/components/ui/button";
+
+// Dynamic import with ssr: false to prevent Fabric.js from being processed on the server
+const Editor = dynamic(
+  () => import("@/features/editor/components/editor").then((mod) => mod.Editor),
+  { ssr: false }
+);
 
 interface EditorProjectIdPageProps {
   params: Promise<{
