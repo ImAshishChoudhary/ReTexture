@@ -127,18 +127,20 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                 ),
             )
 
-            if response.parts:
-                for part in response.parts:
-                    if part.inline_data:
-                        output_filename = f"var_{uuid.uuid4()}.png"
-                        output_dir = static_folder / "output"
-                        output_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        out_path = output_dir / output_filename
-                        part.as_image().save(out_path)
-                        
-                        generated_files.append(f"static/output/{output_filename}")
-                        break
+            if response.candidates:
+                candidate = response.candidates[0]
+                if candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        if part.inline_data:
+                            output_filename = f"var_{uuid.uuid4()}.png"
+                            output_dir = static_folder / "output"
+                            output_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            out_path = output_dir / output_filename
+                            part.as_image().save(out_path)
+                            
+                            generated_files.append(f"static/output/{output_filename}")
+                            break
             
         except Exception as e:
             print(f"Error generating variation: {e}")
@@ -272,9 +274,10 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                 print(f"[AI_SERVICE DEBUG] Response received from Gemini")
                 print(f"[AI_SERVICE DEBUG] Response has parts: {bool(response.parts)}")
                 
-                if response.parts:
-                    print(f"[AI_SERVICE DEBUG] Number of parts: {len(response.parts)}")
-                    for j, part in enumerate(response.parts):
+                if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                    parts = response.candidates[0].content.parts
+                    print(f"[AI_SERVICE DEBUG] Number of parts: {len(parts)}")
+                    for j, part in enumerate(parts):
                         print(f"[AI_SERVICE DEBUG] Part {j+1}: has inline_data = {bool(part.inline_data)}")
                         if part.inline_data:
                             # Convert to base64 instead of saving to file
@@ -289,7 +292,7 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                             print(f"[AI_SERVICE DEBUG] Total variations so far: {len(generated_base64)}")
                             break
                 else:
-                    print(f"[AI_SERVICE DEBUG] ⚠️ No parts in response for variation {variation_num}")
+                    print(f"[AI_SERVICE DEBUG] ⚠️ No parts/candidates in response for variation {variation_num}")
                 
                 # Success - break out of retry loop
                 break

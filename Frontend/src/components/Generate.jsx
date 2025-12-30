@@ -5,7 +5,7 @@ import { useEditorStore } from "../store/useEditorStore";
 import { CiCirclePlus } from "react-icons/ci";
 import { MdAutoAwesome } from "react-icons/md";
 
-// Direct Agent API
+// Direct Agent API (on port 8000)
 const AGENT_URL = "http://localhost:8000";
 
 export default function Generate({ setPagesWithHistory }) {
@@ -135,12 +135,14 @@ export default function Generate({ setPagesWithHistory }) {
       console.log("[FRONTEND DEBUG] - image_data length:", result.image_data?.length || 0);
       console.log("[FRONTEND DEBUG] - format:", result.format);
       
-      if (!result.success || !result.image_data) {
+            if (!result.success || !result.image_data) {
         console.log("[FRONTEND DEBUG] ERROR: No valid image data in response");
-        throw new Error("No image data returned");
+        console.log("[FRONTEND DEBUG] - result success:", result.success);
+        console.log("[FRONTEND DEBUG] - result image_data length:", result.image_data?.length);
+        throw new Error("No image data returned from Agent");
       }
 
-      // Convert base64 to data URL
+      // Agent returns base64, convert to data URL
       const dataUrl = `data:image/png;base64,${result.image_data}`;
       console.log("[FRONTEND DEBUG] Created data URL, length:", dataUrl.length);
       
@@ -218,8 +220,10 @@ export default function Generate({ setPagesWithHistory }) {
         throw new Error(errorData.detail || "Background removal failed");
       }
 
-      const bgResult = await bgResponse.json();
+            const bgResult = await bgResponse.json();
       console.log("[FRONTEND] Background removed! image_data length:", bgResult.image_data?.length);
+      console.log("[FRONTEND] - Format:", bgResult.format);
+      console.log("[FRONTEND] - Success:", bgResult.success);
       
       // Now use streaming endpoint
       console.log("=".repeat(60));
@@ -238,7 +242,10 @@ export default function Generate({ setPagesWithHistory }) {
       console.log("[FRONTEND] Stream response status:", response.status);
       console.log("[FRONTEND] Stream response ok:", response.ok);
 
-      if (!response.ok) {
+            if (!response.ok) {
+        console.log("[FRONTEND] ❌ Stream request failed!");
+        const errText = await response.text();
+        console.log("[FRONTEND] - Error body:", errText);
         throw new Error(`Stream failed: ${response.status}`);
       }
 

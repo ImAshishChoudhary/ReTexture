@@ -49,4 +49,7 @@ router.post('/upload', upload.single('file'), generationController.uploadImage);
 // POST /generate/remove-bg-by-path - Remove background using file path (optimized)
 router.post('/remove-bg-by-path', generationController.removeBackgroundByPath);
 
+// POST /generate/variations-stream - Stream variations from Agent
+router.post('/variations-stream', generationController.streamVariations);
+
 export default router;

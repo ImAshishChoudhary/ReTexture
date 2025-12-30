@@ -49,7 +49,7 @@ export class generationController {
             const startTime = Date.now();
             const response = await fetch(agentUrl, {
                 method: 'POST',
-                body: formData as any,
+                body: formData.getBuffer(),
                 headers: formData.getHeaders()
             });
             const elapsed = Date.now() - startTime;
@@ -135,7 +135,7 @@ export class generationController {
 
             const removeBgResponse = await fetch(`${agentBaseUrl}/remove-bg`, {
                 method: 'POST',
-                body: formData as any,
+                body: formData.getBuffer(),
                 headers: formData.getHeaders()
             });
 
@@ -196,7 +196,9 @@ export class generationController {
                 variations: string[];
             };
             
-            console.log('[Generation] Generated', result.variations?.length || 0, 'variations');
+            console.log('[BACKEND] Generated', result.variations?.length || 0, 'variations');
+            console.log('[BACKEND] Return payload successfully constructed');
+            console.log('='.repeat(60));
 
             const processedDataUrl = `data:image/png;base64,${bgResult.image_data}`;
             
@@ -263,7 +265,7 @@ export class generationController {
 
             const response = await fetch(`${agentBaseUrl}/remove-bg`, {
                 method: 'POST',
-                body: formData as any,
+                body: formData.getBuffer(),
                 headers: formData.getHeaders()
             });
 
@@ -292,6 +294,81 @@ export class generationController {
         } catch (error) {
             console.error('[RemoveBackgroundByPath] Error:', error);
             return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    /**
+     * Stream variations using Server-Sent Events (SSE)
+     * Proxies the stream from the Agent to the Frontend
+     */
+    static async streamVariations(req: AuthRequest, res: Response): Promise<void> {
+        console.log('='.repeat(60));
+        console.log('[BACKEND SSE] streamVariations called');
+        console.log('='.repeat(60));
+
+        try {
+            const { image_data, concept } = req.body;
+
+            if (!image_data) {
+                res.status(400).json({ error: 'No image data provided' });
+                return;
+            }
+
+            // Set headers for SSE
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for Nginx if present
+
+            console.log('[BACKEND SSE] Proxying request to Agent...');
+            console.log('[BACKEND SSE] Payload concept:', concept || 'product photography');
+            console.log('[BACKEND SSE] Payload image_data length:', image_data?.length);
+            
+            const response = await fetch(`${agentBaseUrl}/generate/variations/stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_data, concept: concept || 'product photography' })
+            });
+
+            console.log('[BACKEND SSE] Agent response status:', response.status);
+            console.log('[BACKEND SSE] Agent response ok:', response.ok);
+
+            if (!response.ok) {
+                console.error('[BACKEND SSE] Agent responded with error:', response.status);
+                res.write(`data: ${JSON.stringify({ type: 'error', message: `Agent Error: ${response.status}` })}\n\n`);
+                res.end();
+                return;
+            }
+
+            // Pipe the stream from Agent to Frontend
+            if (!response.body) {
+                console.error('[BACKEND SSE] Agent response body is null');
+                res.end();
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                res.write(chunk);
+            }
+
+            console.log('[BACKEND SSE] Stream proxy complete');
+            res.end();
+
+        } catch (error: any) {
+            console.error('[BACKEND SSE] Error:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Internal server error while streaming' });
+            } else {
+                res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+                res.end();
+            }
         }
     }
 }
