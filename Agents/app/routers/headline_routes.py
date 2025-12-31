@@ -29,6 +29,11 @@ class PlacementRequest(BaseModel):
     canvas_height: int
     background_color: Optional[str] = "#1a1a1a"
 
+class SmartPlacementRequest(BaseModel):
+    image_base64: str
+    canvas_width: int
+    canvas_height: int
+
 # Response Models
 class KeywordResponse(BaseModel):
     success: bool
@@ -127,7 +132,7 @@ async def generate_subheadings(request: HeadlineGenerationRequest):
     
     try:
         result = await headline_service.generate_subheadings(
-            image_base64=request.design_id,
+            image_base64=request.image_base64,  # FIXED: was using design_id by mistake
             design_id=request.design_id,
             campaign_type=request.campaign_type,
             user_keywords=request.user_keywords
@@ -179,6 +184,32 @@ async def calculate_placement(request: PlacementRequest):
     except Exception as e:
         logger.error(f"❌ [HEADLINE API] Placement calculation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/smart-placement")
+async def smart_placement(request: SmartPlacementRequest):
+    """
+    🎯 AI-powered smart placement - analyzes image to find optimal text position.
+    Uses Gemini Vision to detect where subject is and places text in empty zones.
+    """
+    logger.info("🎯 [HEADLINE API] POST /smart-placement")
+    logger.info(f"  ↳ canvas: {request.canvas_width}x{request.canvas_height}")
+    
+    try:
+        result = await headline_service.analyze_image_for_placement(
+            image_base64=request.image_base64,
+            canvas_width=request.canvas_width,
+            canvas_height=request.canvas_height
+        )
+        
+        return result
+    except Exception as e:
+        logger.error(f"❌ [HEADLINE API] Smart placement failed: {str(e)}")
+        # Return default placement on error
+        return headline_service._get_default_placement(
+            request.canvas_width, 
+            request.canvas_height
+        )
 
 
 @router.get("/health")

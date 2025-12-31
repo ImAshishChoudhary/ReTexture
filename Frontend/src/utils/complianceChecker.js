@@ -409,3 +409,112 @@ export function applyAutoFixes(editorPages, canvasSize, options = {}) {
     return { ...page, children: newChildren };
   });
 }
+
+// ============== HEADLINE COMPLIANCE ==============
+
+/**
+ * Headline-specific compliance rules
+ */
+const HEADLINE_RULES = {
+  maxLength: 50,          // Maximum characters for headline
+  maxWords: 8,            // Maximum words
+  minWords: 2,            // Minimum words
+  minFontSize: 24,        // Minimum font for headlines
+  subheadingMaxLength: 100,
+  subheadingMaxWords: 15,
+};
+
+/**
+ * Validate a headline/subheading text before adding to canvas
+ * 
+ * @param {string} text - The headline or subheading text
+ * @param {boolean} isSubheading - Whether this is a subheading
+ * @returns {Object} - { compliant: boolean, issues: [], warnings: [] }
+ */
+export function validateHeadlineText(text, isSubheading = false) {
+  const result = {
+    compliant: true,
+    issues: [],
+    warnings: [],
+  };
+
+  if (!text || text.trim().length === 0) {
+    result.issues.push('Text cannot be empty');
+    result.compliant = false;
+    return result;
+  }
+
+  const rules = isSubheading ? {
+    maxLength: HEADLINE_RULES.subheadingMaxLength,
+    maxWords: HEADLINE_RULES.subheadingMaxWords,
+    minWords: 3,
+  } : {
+    maxLength: HEADLINE_RULES.maxLength,
+    maxWords: HEADLINE_RULES.maxWords,
+    minWords: HEADLINE_RULES.minWords,
+  };
+
+  // 1. Check blocked keywords
+  for (const { pattern, rule } of BLOCKED_PATTERNS) {
+    if (pattern.test(text)) {
+      const match = text.match(pattern);
+      result.issues.push(`${rule}: Found "${match[0]}"`);
+      result.compliant = false;
+    }
+  }
+
+  // 2. Check length
+  if (text.length > rules.maxLength) {
+    result.warnings.push(`Text too long (${text.length}/${rules.maxLength} chars). Consider shortening.`);
+  }
+
+  // 3. Check word count
+  const wordCount = text.trim().split(/\s+/).length;
+  if (wordCount > rules.maxWords) {
+    result.warnings.push(`Too many words (${wordCount}/${rules.maxWords}). Shorter headlines are more impactful.`);
+  }
+  if (wordCount < rules.minWords) {
+    result.warnings.push(`Too few words (${wordCount}/${rules.minWords}). Consider adding more context.`);
+  }
+
+  // 4. Check for ALL CAPS abuse
+  const capsRatio = (text.match(/[A-Z]/g) || []).length / text.length;
+  if (capsRatio > 0.7 && text.length > 10) {
+    result.warnings.push('Excessive use of capital letters. Consider title case instead.');
+  }
+
+  // 5. Check for multiple exclamation marks
+  if (/!{2,}/.test(text)) {
+    result.issues.push('Multiple exclamation marks are not brand compliant');
+    result.compliant = false;
+  }
+
+  // 6. Check for price mentions
+  if (/£\d+|\$\d+|€\d+|\d+\.\d{2}/.test(text)) {
+    result.issues.push('Price mentions require separate approval. Contact brand team.');
+    result.compliant = false;
+  }
+
+  return result;
+}
+
+/**
+ * Format compliance result for display
+ */
+export function formatHeadlineCompliance(result) {
+  if (result.compliant && result.warnings.length === 0) {
+    return { status: 'pass', message: '✅ Headline is brand compliant' };
+  } else if (result.compliant && result.warnings.length > 0) {
+    return { 
+      status: 'warning', 
+      message: `⚠️ ${result.warnings.length} suggestion(s)`,
+      details: result.warnings 
+    };
+  } else {
+    return { 
+      status: 'fail', 
+      message: `❌ ${result.issues.length} compliance issue(s)`,
+      details: result.issues 
+    };
+  }
+}

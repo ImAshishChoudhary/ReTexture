@@ -1,7 +1,3 @@
-/**
- * HeadlineGenerator Component
- * AI-powered headline and subheading generation using Gemini Vision
- */
 
 import React, { useState, useCallback } from 'react';
 import { Button, Input, Select, Card, Spin, Tag, message, Tooltip, Space, Divider } from 'antd';
@@ -19,6 +15,8 @@ import {
   generateSubheadings, 
   calculatePlacement 
 } from '../api/headlineApi';
+import { TextPlacementService } from '../services/textPlacementService';
+import { validateHeadlineText, formatHeadlineCompliance } from '../utils/complianceChecker';
 
 const { Option } = Select;
 
@@ -36,7 +34,9 @@ const HeadlineGenerator = ({
   canvasSize,         // { w: number, h: number }
   onAddHeadline,      // Callback to add headline to canvas
   onAddSubheading,    // Callback to add subheading to canvas
-  designId = 'default'
+  designId = 'default',
+  logoPosition = 'bottom-right',
+  imageBounds = null  // { x, y, width, height } for TescoLogo-style placement
 }) => {
   // State
   const [keywords, setKeywords] = useState([]);
@@ -44,6 +44,9 @@ const HeadlineGenerator = ({
   const [campaignType, setCampaignType] = useState(null);
   const [headlines, setHeadlines] = useState([]);
   const [subheadings, setSubheadings] = useState([]);
+  
+  // AntD Message Hook
+  const [messageApi, contextHolder] = message.useMessage();
   
   // Loading states
   const [loadingKeywords, setLoadingKeywords] = useState(false);
@@ -57,11 +60,11 @@ const HeadlineGenerator = ({
     headlinesCount: headlines.length,
     subheadingsCount: subheadings.length
   });
-  
+
   // Handle keyword suggestion (like VS Code commit message)
   const handleSuggestKeywords = useCallback(async () => {
     if (!canvasImageBase64) {
-      message.warning('No image on canvas to analyze');
+      messageApi.warning('No image on canvas to analyze');
       return;
     }
     
@@ -73,13 +76,13 @@ const HeadlineGenerator = ({
       
       if (result.success && result.keywords?.length > 0) {
         setKeywords(result.keywords);
-        message.success(`Found ${result.keywords.length} keywords`);
+        messageApi.success(`Found ${result.keywords.length} keywords`);
       } else {
-        message.error(result.error || 'Failed to suggest keywords');
+        messageApi.error(result.error || 'Failed to suggest keywords');
       }
     } catch (error) {
       console.error('❌ [HEADLINE GENERATOR] Keyword suggestion error:', error);
-      message.error('Failed to suggest keywords');
+      messageApi.error('Failed to suggest keywords');
     } finally {
       setLoadingKeywords(false);
     }
@@ -108,7 +111,7 @@ const HeadlineGenerator = ({
     
     if (!canvasImageBase64) {
       console.log('❌ [HEADLINE GENERATOR] No image - aborting');
-      message.warning('No image on canvas to analyze');
+      messageApi.warning('No image on canvas to analyze');
       return;
     }
     
@@ -142,15 +145,15 @@ const HeadlineGenerator = ({
         console.log('✅ [HEADLINE GENERATOR] Headlines to set:', JSON.stringify(result.headlines, null, 2));
         setHeadlines(result.headlines);
         console.log('✅ [HEADLINE GENERATOR] setHeadlines() called');
-        message.success(`Generated ${result.headlines.length} headlines`);
+        messageApi.success(`Generated ${result.headlines.length} headlines`);
       } else {
         console.log('❌ [HEADLINE GENERATOR] FAILED - No headlines in result');
         console.log('❌ [HEADLINE GENERATOR] Error:', result.error);
-        message.error(result.error || 'Failed to generate headlines');
+        messageApi.error(result.error || 'Failed to generate headlines');
       }
     } catch (error) {
       console.error('❌ [HEADLINE GENERATOR] EXCEPTION:', error);
-      message.error('Failed to generate headlines');
+      messageApi.error('Failed to generate headlines');
     } finally {
       console.log('📝 [HEADLINE GENERATOR] Setting loadingHeadlines=false');
       setLoadingHeadlines(false);
@@ -161,7 +164,7 @@ const HeadlineGenerator = ({
   // Generate subheadings
   const handleGenerateSubheadings = useCallback(async () => {
     if (!canvasImageBase64) {
-      message.warning('No image on canvas to analyze');
+      messageApi.warning('No image on canvas to analyze');
       return;
     }
     
@@ -178,39 +181,136 @@ const HeadlineGenerator = ({
       
       if (result.success && result.subheadings?.length > 0) {
         setSubheadings(result.subheadings);
-        message.success(`Generated ${result.subheadings.length} subheadings`);
+        messageApi.success(`Generated ${result.subheadings.length} subheadings`);
       } else {
-        message.error(result.error || 'Failed to generate subheadings');
+        messageApi.error(result.error || 'Failed to generate subheadings');
       }
     } catch (error) {
       console.error('❌ [HEADLINE GENERATOR] Subheading generation error:', error);
-      message.error('Failed to generate subheadings');
+      messageApi.error('Failed to generate subheadings');
     } finally {
       setLoadingSubheadings(false);
     }
   }, [canvasImageBase64, designId, campaignType, keywords]);
   
-  // Add headline to canvas with placement
+  // Add headline to canvas with SMART LLM PLACEMENT
   const handleAddToCanvas = useCallback(async (text, isSubheading = false) => {
-    console.log('➕ [HEADLINE GENERATOR] Adding to canvas:', { text, isSubheading });
+    console.log('🎯 [HEADLINE GENERATOR] handleAddToCanvas called with:', { text, isSubheading });
+    console.log('🎯 [HEADLINE GENERATOR] Canvas Size:', canvasSize);
     
-    // Get optimal placement
-    const placement = await calculatePlacement({
-      canvasWidth: canvasSize?.w || 800,
-      canvasHeight: canvasSize?.h || 600,
-      backgroundColor: '#1a1a1a'
-    });
+    // COMPLIANCE CHECK - Validate text before adding
+    const compliance = validateHeadlineText(text, isSubheading);
+    const complianceStatus = formatHeadlineCompliance(compliance);
+    console.log('🛡️ [HEADLINE GENERATOR] Compliance check:', complianceStatus);
     
-    const position = isSubheading ? placement.subheading : placement.headline;
-    
-    if (isSubheading) {
-      onAddSubheading?.(text, position);
-    } else {
-      onAddHeadline?.(text, position);
+    if (!compliance.compliant) {
+      // HARD FAIL - Block non-compliant text
+      messageApi.error(complianceStatus.message);
+      complianceStatus.details?.forEach(issue => {
+        messageApi.warning(issue, 5);
+      });
+      return; // Don't add to canvas
     }
     
-    message.success(`Added "${text.substring(0, 20)}..." to canvas`);
-  }, [canvasSize, onAddHeadline, onAddSubheading]);
+    if (complianceStatus.status === 'warning') {
+      // Show warnings but allow adding
+      messageApi.warning(complianceStatus.message);
+    }
+    
+    // Get image bounds for positioning
+    const bounds = imageBounds || { 
+      x: 0, 
+      y: 0, 
+      width: canvasSize?.w || 800, 
+      height: canvasSize?.h || 600 
+    };
+    
+    console.log('📐 [HEADLINE GENERATOR] Using bounds:', bounds);
+    
+    // Calculate RELIABLE CENTERED POSITIONING within image
+    const padding = Math.max(20, bounds.width * 0.05);
+    const textWidth = bounds.width * 0.8; // 80% of image width
+    const fontSize = isSubheading 
+      ? Math.max(16, Math.min(28, bounds.width / 25))
+      : Math.max(24, Math.min(48, bounds.width / 15));
+    
+    // Position: Centered horizontally, top 15% for headline, 25% for subheading
+    const xPos = bounds.x + (bounds.width - textWidth) / 2;
+    const yPos = isSubheading 
+      ? bounds.y + bounds.height * 0.25
+      : bounds.y + bounds.height * 0.12;
+    
+    // Default styling (will be enhanced by LLM if available)
+    let position = {
+      x: xPos,
+      y: yPos,
+      width: textWidth,
+      fontSize: fontSize,
+      color: '#FFFFFF',
+      align: 'center',
+      shadowEnabled: true,
+      shadowColor: 'rgba(0,0,0,0.6)',
+      shadowBlur: 4,
+      fontWeight: isSubheading ? 'normal' : 'bold'
+    };
+    
+    // TRY LLM-POWERED SMART PLACEMENT for better styling
+    if (canvasImageBase64) {
+      try {
+        console.log('🤖 [HEADLINE GENERATOR] Calling LLM Smart Placement API...');
+        const { getSmartPlacement } = await import('../api/headlineApi');
+        const result = await getSmartPlacement({
+          imageBase64: canvasImageBase64,
+          canvasWidth: bounds.width,
+          canvasHeight: bounds.height
+        });
+        
+        if (result.success && result.placement) {
+          const llmPos = isSubheading 
+            ? result.placement.subheading 
+            : result.placement.headline;
+          
+          // Merge LLM styling with our reliable positioning
+          position = {
+            ...position,
+            color: llmPos.color || position.color,
+            shadowEnabled: llmPos.shadow !== false,
+            shadowColor: llmPos.shadowColor || position.shadowColor,
+            align: llmPos.align || 'center',
+            fontWeight: llmPos.fontWeight || position.fontWeight,
+          };
+          
+          console.log('✅ [HEADLINE GENERATOR] Enhanced with LLM styling:', position);
+          console.log('🎨 [HEADLINE GENERATOR] Subject position:', result.placement.subject_position);
+        }
+      } catch (e) {
+        console.warn('⚠️ [HEADLINE GENERATOR] LLM styling failed, using defaults', e);
+      }
+    }
+    
+    console.log('� [HEADLINE GENERATOR] Final position:', position);
+    console.log('📐 [HEADLINE GENERATOR] Using bounds:', bounds);
+    
+    console.log('📝 [HEADLINE GENERATOR] Calling parent callback with:', { text, position, isSubheading });
+    
+    if (isSubheading) {
+      if (typeof onAddSubheading === 'function') {
+        onAddSubheading(text, position);
+        console.log('✅ [HEADLINE GENERATOR] onAddSubheading called');
+      } else {
+        console.error('❌ [HEADLINE GENERATOR] onAddSubheading is NOT a function');
+      }
+    } else {
+      if (typeof onAddHeadline === 'function') {
+        onAddHeadline(text, position);
+        console.log('✅ [HEADLINE GENERATOR] onAddHeadline called');
+      } else {
+        console.error('❌ [HEADLINE GENERATOR] onAddHeadline is NOT a function');
+      }
+    }
+    
+    messageApi.success(`Added "${text.substring(0, 20)}..." to canvas`);
+  }, [canvasSize, canvasImageBase64, onAddHeadline, onAddSubheading, logoPosition, imageBounds]);
   
   // Render confidence stars
   const renderConfidence = (confidence) => {
@@ -228,6 +328,7 @@ const HeadlineGenerator = ({
   
   return (
     <div style={{ padding: '8px 0' }}>
+      {contextHolder}
       {/* Header */}
       <div style={{ marginBottom: 12 }}>
         <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -345,21 +446,28 @@ const HeadlineGenerator = ({
                   background: '#f5f5f5',
                   border: '1px solid #e8e8e8'
                 }}
-                bodyStyle={{ padding: 8 }}
+                styles={{ body: { padding: 8 } }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{h.text}</div>
                     <div style={{ marginTop: 2 }}>{renderConfidence(h.confidence)}</div>
                   </div>
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => handleAddToCanvas(h.text, false)}
-                  >
-                    Add
-                  </Button>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      style={{ position: 'relative', zIndex: 10 }} // Ensure button is above potential overlays
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('👆 [HEADLINE GENERATOR] Add Headline Button Clicked:', h.text);
+                        handleAddToCanvas(h.text, false);
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -382,20 +490,28 @@ const HeadlineGenerator = ({
                   background: '#f0f5ff',
                   border: '1px solid #d6e4ff'
                 }}
-                bodyStyle={{ padding: 8 }}
+                styles={{ body: { padding: 8 } }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12 }}>{s.text}</div>
                     <div style={{ marginTop: 2 }}>{renderConfidence(s.confidence)}</div>
                   </div>
-                  <Button
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => handleAddToCanvas(s.text, true)}
-                  >
-                    Add
-                  </Button>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      style={{ position: 'relative', zIndex: 10 }}
+                      onClick={(e) => {
+                         e.stopPropagation();
+                         console.log('👆 [HEADLINE GENERATOR] Add Subheading Button Clicked:', s.text);
+                         handleAddToCanvas(s.text, true);
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}

@@ -195,3 +195,72 @@ export async function calculatePlacement({ canvasWidth, canvasHeight, background
     };
   }
 }
+
+/**
+ * 🎯 AI-Powered Smart Placement
+ * Uses Gemini Vision to analyze image and find optimal text position
+ * @param {Object} params
+ * @param {string} params.imageBase64 - Base64 encoded image
+ * @param {number} params.canvasWidth
+ * @param {number} params.canvasHeight
+ * @returns {Promise<{success: boolean, placement: Object}>}
+ */
+export async function getSmartPlacement({ imageBase64, canvasWidth, canvasHeight }) {
+  console.log('🎯 [HEADLINE API] Getting smart AI placement...');
+  console.log('  ↳ canvas:', canvasWidth, 'x', canvasHeight);
+  
+  try {
+    const response = await fetch(`${AGENT_API_URL}/api/headline/smart-placement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image_base64: imageBase64,
+        canvas_width: canvasWidth,
+        canvas_height: canvasHeight
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API error: ${response.status} - ${error}`);
+    }
+    
+    const data = await response.json();
+    console.log('🎯 [HEADLINE API] Smart placement received:', data);
+    return data;
+    
+  } catch (error) {
+    console.error('❌ [HEADLINE API] Smart placement failed:', error);
+    // Return default placement on error
+    return {
+      success: true,
+      placement: {
+        headline: { 
+          x: canvasWidth / 2, 
+          y: canvasHeight * 0.15, 
+          fontSize: 42, 
+          fontWeight: 'bold',
+          align: 'center', 
+          color: '#FFFFFF',
+          shadow: true,
+          shadowColor: 'rgba(0,0,0,0.5)',
+          shadowBlur: 4,
+          shadowOffsetX: 2,
+          shadowOffsetY: 2
+        },
+        subheading: { 
+          x: canvasWidth / 2, 
+          y: canvasHeight * 0.22, 
+          fontSize: 22, 
+          fontWeight: 'normal',
+          align: 'center', 
+          color: '#FFFFFF',
+          shadow: true,
+          shadowColor: 'rgba(0,0,0,0.3)'
+        }
+      }
+    };
+  }
+}

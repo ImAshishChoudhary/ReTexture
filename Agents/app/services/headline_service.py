@@ -390,35 +390,189 @@ Return ONLY a JSON array with 3 subheadings:
             "subheadings": []
         }
 
+async def analyze_image_for_placement(image_base64: str, canvas_width: int, canvas_height: int) -> dict:
+    """
+    🎯 SMART AI-POWERED PLACEMENT
+    Uses Gemini Vision to analyze the image and find optimal text placement.
+    """
+    log_json("INFO", "🎯 Analyzing image for smart placement...", 
+             canvas_width=canvas_width, canvas_height=canvas_height)
+    
+    try:
+        client = _init_gemini_client()
+        image_bytes = _decode_base64_image(image_base64)
+        
+        prompt = f"""Analyze this image for optimal text placement in a retail advertisement.
+
+Canvas dimensions: {canvas_width}px x {canvas_height}px
+
+Please identify:
+1. Where is the main subject (person/product) located? (top, center, bottom, left, right)
+2. Which areas are relatively empty/clear for text overlay?
+3. What is the dominant background color/brightness?
+
+Based on your analysis, recommend placement for:
+- HEADLINE: Short text (3-5 words), should be prominent and readable
+- SUBHEADING: Longer text (8-15 words), below or near headline
+
+Return ONLY a JSON object (no markdown, no explanation):
+{{
+    "subject_position": "center-bottom",
+    "empty_zones": ["top", "bottom-left"],
+    "background_brightness": "dark",
+    "headline": {{
+        "x": 540,
+        "y": 100,
+        "align": "center",
+        "fontSize": 42,
+        "fontWeight": "bold",
+        "color": "#FFFFFF",
+        "shadow": true,
+        "shadowColor": "rgba(0,0,0,0.5)"
+    }},
+    "subheading": {{
+        "x": 540,
+        "y": 160,
+        "align": "center", 
+        "fontSize": 22,
+        "fontWeight": "normal",
+        "color": "#FFFFFF",
+        "shadow": true,
+        "shadowColor": "rgba(0,0,0,0.3)"
+    }}
+}}
+
+IMPORTANT:
+- Place text where it won't overlap with the main subject
+- Use white text (#FFFFFF) for dark backgrounds, use dark (#1a1a1a) for light backgrounds
+- Include shadow for readability over images
+- Keep headline in top third if possible, unless blocked by subject
+- Follow Tesco brand style: clean, professional, family-friendly
+"""
+        
+        log_json("INFO", "📤 Sending smart placement request to Gemini...")
+        
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                        types.Part.from_text(text=prompt)
+                    ]
+                )
+            ]
+        )
+        
+        result_text = response.text.strip()
+        log_json("INFO", "📥 Gemini placement response received", 
+                 response_length=len(result_text))
+        
+        # Parse JSON response
+        if "{" in result_text:
+            json_start = result_text.index("{")
+            json_end = result_text.rindex("}") + 1
+            placement = json.loads(result_text[json_start:json_end])
+            
+            log_json("INFO", "✅ Smart placement calculated", 
+                     subject_position=placement.get("subject_position"),
+                     background=placement.get("background_brightness"))
+            
+            return {
+                "success": True,
+                "placement": placement
+            }
+        else:
+            # Fallback to safe defaults
+            return _get_default_placement(canvas_width, canvas_height)
+            
+    except Exception as e:
+        log_json("ERROR", f"❌ Smart placement failed: {str(e)}")
+        return _get_default_placement(canvas_width, canvas_height)
+
+
+def _get_default_placement(canvas_width: int, canvas_height: int) -> dict:
+    """Fallback placement when AI analysis fails"""
+    return {
+        "success": True,
+        "placement": {
+            "subject_position": "center",
+            "empty_zones": ["top"],
+            "background_brightness": "dark",
+            "headline": {
+                "x": canvas_width // 2,
+                "y": int(canvas_height * 0.15),
+                "align": "center",
+                "fontSize": 42,
+                "fontWeight": "bold",
+                "color": "#FFFFFF",
+                "shadow": True,
+                "shadowColor": "rgba(0,0,0,0.5)",
+                "shadowBlur": 4,
+                "shadowOffsetX": 2,
+                "shadowOffsetY": 2
+            },
+            "subheading": {
+                "x": canvas_width // 2,
+                "y": int(canvas_height * 0.22),
+                "align": "center",
+                "fontSize": 22,
+                "fontWeight": "normal",
+                "color": "#FFFFFF",
+                "shadow": True,
+                "shadowColor": "rgba(0,0,0,0.3)",
+                "shadowBlur": 3,
+                "shadowOffsetX": 1,
+                "shadowOffsetY": 1
+            }
+        }
+    }
+
+
 def calculate_optimal_placement(canvas_width: int, canvas_height: int) -> dict:
     """
-    Calculate optimal text placement positions.
+    Calculate optimal text placement positions (synchronous fallback).
     Returns positions for headline and subheading.
     """
     logger.info(f"📐 [HEADLINE SERVICE] Calculating placement for {canvas_width}x{canvas_height}")
     
-    # Headline: centered, in top third
+    # Headline: centered, in top 15%
     headline_x = canvas_width // 2
-    headline_y = canvas_height // 5  # Top 20%
+    headline_y = int(canvas_height * 0.15)
     
     # Subheading: centered, below headline
     subheading_x = canvas_width // 2
-    subheading_y = headline_y + 50  # 50px below headline
+    subheading_y = int(canvas_height * 0.22)
     
     placement = {
         "headline": {
             "x": headline_x,
             "y": headline_y,
-            "fontSize": 36,
+            "fontSize": 42,
+            "fontWeight": "bold",
             "align": "center",
-            "color": "#FFFFFF"  # Default white, can be adjusted
+            "color": "#FFFFFF",
+            "shadow": True,
+            "shadowColor": "rgba(0,0,0,0.5)",
+            "shadowBlur": 4,
+            "shadowOffsetX": 2,
+            "shadowOffsetY": 2,
+            "fontFamily": "Arial, sans-serif"
         },
         "subheading": {
             "x": subheading_x,
             "y": subheading_y,
-            "fontSize": 20,
+            "fontSize": 22,
+            "fontWeight": "normal",
             "align": "center",
-            "color": "#FFFFFF"
+            "color": "#FFFFFF",
+            "shadow": True,
+            "shadowColor": "rgba(0,0,0,0.3)",
+            "shadowBlur": 3,
+            "shadowOffsetX": 1,
+            "shadowOffsetY": 1,
+            "fontFamily": "Arial, sans-serif"
         }
     }
     
@@ -459,3 +613,4 @@ def reset_rate_limit(design_id: str):
     if design_id in generation_counts:
         del generation_counts[design_id]
         logger.info(f"🔄 [HEADLINE SERVICE] Rate limit reset for design: {design_id}")
+

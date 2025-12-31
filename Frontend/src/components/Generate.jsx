@@ -36,6 +36,39 @@ export default function Generate({ setPagesWithHistory }) {
   // Find first image on canvas
   const firstImageOnCanvas = activePage?.children?.find(el => el.type === 'image');
 
+  // Detect logo position for smart placement
+  const detectedLogoPosition = (() => {
+    const logo = activePage?.children?.find(el => el.id && el.id.startsWith('logo-'));
+    if (!logo) return 'bottom-right'; // Default to "riskiest" spot if unknown
+
+    const cx = logo.x + (logo.width / 2);
+    const cy = logo.y + (logo.height / 2);
+    const midX = (canvasSize?.w || 800) / 2;
+    const midY = (canvasSize?.h || 600) / 2;
+
+    if (cy < midY) {
+      return cx < midX ? 'top-left' : 'top-right';
+    } else {
+      return cx < midX ? 'bottom-left' : 'bottom-right';
+    }
+  })();
+
+  // Calculate image bounds for TescoLogo-style placement
+  const imageBounds = (() => {
+    const mainImage = activePage?.children?.find(el => 
+      el.type === 'image' && !el.id?.startsWith('logo-')
+    );
+    if (mainImage) {
+      return {
+        x: mainImage.x || 0,
+        y: mainImage.y || 0,
+        width: mainImage.width || canvasSize?.w || 800,
+        height: mainImage.height || canvasSize?.h || 600
+      };
+    }
+    return null; // Will use canvas bounds as fallback
+  })();
+
   // Auto-detect and capture canvas image when it changes
   useEffect(() => {
     const loadCanvasImage = async () => {
@@ -85,6 +118,16 @@ export default function Generate({ setPagesWithHistory }) {
     }
     return null;
   }, [activePage]);
+  // Debug: Log active page content changes
+  useEffect(() => {
+    if (activePage?.children) {
+      console.log('🖼️ [GENERATE] Active page updated. Item count:', activePage.children.length);
+      const lastItem = activePage.children[activePage.children.length - 1];
+      if (lastItem) {
+        console.log('🖼️ [GENERATE] Last item added:', lastItem.type, lastItem.text || lastItem.id);
+      }
+    }
+  }, [activePage]);
 
   // Add headline to canvas
   const handleAddHeadline = useCallback((text, position) => {
@@ -95,18 +138,33 @@ export default function Generate({ setPagesWithHistory }) {
       text: text,
       x: position?.x || canvasSize?.w / 2 || 400,
       y: position?.y || 80,
-      fontSize: position?.fontSize || 36,
+      fontSize: position?.fontSize || 42,
       fill: position?.color || '#FFFFFF',
       fontFamily: 'Arial',
       fontWeight: 'bold',
       align: position?.align || 'center',
-      width: canvasSize?.w - 40 || 760,
+      width: position?.width || canvasSize?.w - 40 || 760,
       draggable: true,
+      // Smart Styling
+      shadowEnabled: position?.shadow !== false,
+      shadowColor: position?.shadowColor || 'rgba(0,0,0,0.5)',
+      shadowBlur: position?.shadowBlur || 4,
+      shadowOffsetX: 2,
+      shadowOffsetY: 2
     };
     
     setPagesWithHistory(prev => {
+      // Deep copy to break references
       const cp = JSON.parse(JSON.stringify(prev));
-      cp[activeIndex].children.push(newTextElement);
+      const pageIndex = activeIndex >= 0 && activeIndex < cp.length ? activeIndex : 0;
+      
+      if (!cp[pageIndex]) {
+        console.error('❌ [GENERATE] Active page index invalid:', activeIndex);
+        return prev;
+      }
+
+      cp[pageIndex].children.push(newTextElement);
+      console.log(`✅ [GENERATE] Added headline "${text.substring(0,10)}..." to page ${pageIndex}`);
       return cp;
     });
     
@@ -122,13 +180,19 @@ export default function Generate({ setPagesWithHistory }) {
       text: text,
       x: position?.x || canvasSize?.w / 2 || 400,
       y: position?.y || 140,
-      fontSize: position?.fontSize || 20,
+      fontSize: position?.fontSize || 24,
       fill: position?.color || '#FFFFFF',
       fontFamily: 'Arial',
       fontWeight: 'normal',
       align: position?.align || 'center',
       width: canvasSize?.w - 40 || 760,
       draggable: true,
+      // Smart Styling
+      shadowEnabled: position?.shadow !== false,
+      shadowColor: position?.shadowColor || 'rgba(0,0,0,0.5)',
+      shadowBlur: position?.shadowBlur || 3,
+      shadowOffsetX: 1,
+      shadowOffsetY: 1
     };
     
     setPagesWithHistory(prev => {
@@ -636,9 +700,11 @@ export default function Generate({ setPagesWithHistory }) {
       <HeadlineGenerator
         canvasImageBase64={canvasImageBase64}
         canvasSize={canvasSize}
+        logoPosition={detectedLogoPosition}
+        imageBounds={imageBounds}
         onAddHeadline={handleAddHeadline}
         onAddSubheading={handleAddSubheading}
-        designId={`design-${Date.now()}`}
+        designId={selectedUniqueId || 'default'}
       />
       
       {/* Refresh canvas image button */}
