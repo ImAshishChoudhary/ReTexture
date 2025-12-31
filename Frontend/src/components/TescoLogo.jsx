@@ -162,12 +162,12 @@ export default function TescoLogo({ setPagesWithHistory }) {
     });
   }, [enabled, status, size, position, opacity, logoType, activeIndex, currentLogoConfig, getImageBounds, calculateLogoPosition, setPagesWithHistory]);
 
-  // Update logo when settings change
+  // Update logo when settings change OR when main image changes
   useEffect(() => {
     if (enabled) {
       updateLogo();
     }
-  }, [enabled, position, size, opacity, logoType, status]);
+  }, [enabled, position, size, opacity, logoType, status, editorPages, activeIndex, canvasSize]);
 
   // Handle toggle
   const handleToggle = (checked) => {
