@@ -6,7 +6,7 @@
  * - Live position/size/opacity updates
  * - Toggle on/off
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, Select, Slider, Space, message, Switch } from 'antd';
 import useImage from 'use-image';
 import { useEditorStore } from '../store/useEditorStore';
@@ -53,8 +53,8 @@ export default function TescoLogo({ setPagesWithHistory }) {
   const currentLogoConfig = LOGO_CONFIG[logoType];
   const [image, status] = useImage(currentLogoConfig.src, 'anonymous');
 
-  // Find main image bounds on canvas
-  const getImageBounds = useCallback(() => {
+  // Memoized image bounds - efficiently tracks main image changes
+  const imageBounds = useMemo(() => {
     const page = editorPages[activeIndex];
     if (page && page.children) {
       const mainImage = page.children.find(child => 
@@ -65,12 +65,17 @@ export default function TescoLogo({ setPagesWithHistory }) {
           x: mainImage.x || 0,
           y: mainImage.y || 0,
           width: mainImage.width || canvasSize.w,
-          height: mainImage.height || canvasSize.h
+          height: mainImage.height || canvasSize.h,
+          // Add a key for change detection
+          _key: `${mainImage.x}-${mainImage.y}-${mainImage.width}-${mainImage.height}`
         };
       }
     }
-    return { x: 0, y: 0, width: canvasSize.w, height: canvasSize.h };
+    return { x: 0, y: 0, width: canvasSize.w, height: canvasSize.h, _key: 'default' };
   }, [editorPages, activeIndex, canvasSize]);
+
+  // Legacy wrapper for backward compatibility
+  const getImageBounds = useCallback(() => imageBounds, [imageBounds]);
 
   // Calculate logo position
   const calculateLogoPosition = useCallback((bounds, logoWidth, logoHeight, pos) => {
@@ -162,12 +167,14 @@ export default function TescoLogo({ setPagesWithHistory }) {
     });
   }, [enabled, status, size, position, opacity, logoType, activeIndex, currentLogoConfig, getImageBounds, calculateLogoPosition, setPagesWithHistory]);
 
-  // Update logo when settings change OR when main image changes
+  // Update logo when settings change OR when main image bounds change
   useEffect(() => {
-    if (enabled) {
+    if (enabled && status === 'loaded') {
+      console.log('🏪 [LOGO] Repositioning logo for new bounds:', imageBounds._key);
       updateLogo();
     }
-  }, [enabled, position, size, opacity, logoType, status, editorPages, activeIndex, canvasSize]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, position, size, opacity, logoType, status, imageBounds._key]);
 
   // Handle toggle
   const handleToggle = (checked) => {
