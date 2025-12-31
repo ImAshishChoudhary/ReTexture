@@ -59,13 +59,30 @@ export default function Generate({ setPagesWithHistory }) {
       el.type === 'image' && !el.id?.startsWith('logo-')
     );
     if (mainImage) {
-      return {
+      console.log('📐 [GENERATE] Main Image Found:');
+      console.log('   ├─ ID:', mainImage.id);
+      console.log('   ├─ x:', mainImage.x);
+      console.log('   ├─ y:', mainImage.y);
+      console.log('   ├─ width:', mainImage.width);
+      console.log('   ├─ height:', mainImage.height);
+      console.log('   └─ scaleX/Y:', mainImage.scaleX, mainImage.scaleY);
+      
+      // Use actual rendered dimensions (accounting for scale)
+      const scaleX = mainImage.scaleX || 1;
+      const scaleY = mainImage.scaleY || 1;
+      const width = (mainImage.width || canvasSize?.w || 800) * scaleX;
+      const height = (mainImage.height || canvasSize?.h || 600) * scaleY;
+      
+      const bounds = {
         x: mainImage.x || 0,
         y: mainImage.y || 0,
-        width: mainImage.width || canvasSize?.w || 800,
-        height: mainImage.height || canvasSize?.h || 600
+        width: width,
+        height: height
       };
+      console.log('📐 [GENERATE] Calculated Bounds:', bounds);
+      return bounds;
     }
+    console.warn('⚠️ [GENERATE] No main image found, will use canvas bounds');
     return null; // Will use canvas bounds as fallback
   })();
 
@@ -129,29 +146,47 @@ export default function Generate({ setPagesWithHistory }) {
     }
   }, [activePage]);
 
-  // Add headline to canvas
+  // Add headline to canvas (replaces existing headline)
   const handleAddHeadline = useCallback((text, position) => {
+    console.log('═══════════════════════════════════════════════════════════════');
     console.log('➕ [GENERATE] Adding headline to canvas:', text);
+    console.log('➕ [GENERATE] Position received:', position);
+    console.log('═══════════════════════════════════════════════════════════════');
+    
+    // Use bold property (SelectableText uses bold/italic booleans, not fontStyle)
+    const isBold = position?.fontWeight >= 600 || position?.fontWeight === 'bold' || position?.fontWeight === 700;
+    
     const newTextElement = {
       id: `headline-${generateId()}`,
       type: 'text',
       text: text,
-      x: position?.x || canvasSize?.w / 2 || 400,
+      x: position?.x || 50, // Simple left padding as default
       y: position?.y || 80,
       fontSize: position?.fontSize || 42,
       fill: position?.color || '#FFFFFF',
-      fontFamily: 'Arial',
-      fontWeight: 'bold',
+      fontFamily: position?.fontFamily || 'Inter, Arial, sans-serif',
+      bold: isBold, // SelectableText uses bold: true/false, not fontStyle
+      italic: false,
       align: position?.align || 'center',
-      width: position?.width || canvasSize?.w - 40 || 760,
+      width: position?.width || (canvasSize?.w ? canvasSize.w * 0.8 : 600), // 80% of canvas
+      wrap: 'word', // Important: enable word wrapping
       draggable: true,
       // Smart Styling
-      shadowEnabled: position?.shadow !== false,
+      shadowEnabled: position?.shadowEnabled !== false,
       shadowColor: position?.shadowColor || 'rgba(0,0,0,0.5)',
       shadowBlur: position?.shadowBlur || 4,
       shadowOffsetX: 2,
       shadowOffsetY: 2
     };
+    
+    console.log('➕ [GENERATE] Text Element Created:');
+    console.log('   ├─ X:', newTextElement.x);
+    console.log('   ├─ Y:', newTextElement.y);
+    console.log('   ├─ WIDTH:', newTextElement.width);
+    console.log('   ├─ Font Size:', newTextElement.fontSize);
+    console.log('   ├─ Font Family:', newTextElement.fontFamily);
+    console.log('   ├─ Align:', newTextElement.align);
+    console.log('   └─ Fill:', newTextElement.fill);
     
     setPagesWithHistory(prev => {
       // Deep copy to break references
@@ -163,6 +198,13 @@ export default function Generate({ setPagesWithHistory }) {
         return prev;
       }
 
+      // REMOVE existing headlines first (replace behavior)
+      const existingHeadlines = cp[pageIndex].children.filter(el => el.id?.startsWith('headline-'));
+      if (existingHeadlines.length > 0) {
+        console.log('🗑️ [GENERATE] Removing', existingHeadlines.length, 'existing headline(s)');
+        cp[pageIndex].children = cp[pageIndex].children.filter(el => !el.id?.startsWith('headline-'));
+      }
+
       cp[pageIndex].children.push(newTextElement);
       console.log(`✅ [GENERATE] Added headline "${text.substring(0,10)}..." to page ${pageIndex}`);
       return cp;
@@ -171,33 +213,61 @@ export default function Generate({ setPagesWithHistory }) {
     message.success('Headline added to canvas!');
   }, [canvasSize, setPagesWithHistory, activeIndex]);
 
-  // Add subheading to canvas
+  // Add subheading to canvas (replaces existing subheading)
   const handleAddSubheading = useCallback((text, position) => {
+    console.log('═══════════════════════════════════════════════════════════════');
     console.log('➕ [GENERATE] Adding subheading to canvas:', text);
+    console.log('➕ [GENERATE] Position received:', position);
+    console.log('═══════════════════════════════════════════════════════════════');
+    
+    // Use bold property (SelectableText uses bold/italic booleans, not fontStyle)
+    const isBold = position?.fontWeight >= 600 || position?.fontWeight === 'bold';
+    
     const newTextElement = {
       id: `subheading-${generateId()}`,
       type: 'text',
       text: text,
-      x: position?.x || canvasSize?.w / 2 || 400,
+      x: position?.x || 50, // Simple left padding as default
       y: position?.y || 140,
       fontSize: position?.fontSize || 24,
       fill: position?.color || '#FFFFFF',
-      fontFamily: 'Arial',
-      fontWeight: 'normal',
+      fontFamily: position?.fontFamily || 'Open Sans, Arial, sans-serif',
+      bold: isBold, // SelectableText uses bold: true/false, not fontStyle
+      italic: false,
       align: position?.align || 'center',
-      width: canvasSize?.w - 40 || 760,
+      width: position?.width || (canvasSize?.w ? canvasSize.w * 0.8 : 600), // 80% of canvas
+      wrap: 'word', // Important: enable word wrapping
       draggable: true,
       // Smart Styling
-      shadowEnabled: position?.shadow !== false,
+      shadowEnabled: position?.shadowEnabled !== false,
       shadowColor: position?.shadowColor || 'rgba(0,0,0,0.5)',
       shadowBlur: position?.shadowBlur || 3,
       shadowOffsetX: 1,
       shadowOffsetY: 1
     };
     
+    console.log('➕ [GENERATE] Subheading Element Created:');
+    console.log('   ├─ X:', newTextElement.x);
+    console.log('   ├─ Y:', newTextElement.y);
+    console.log('   ├─ WIDTH:', newTextElement.width);
+    console.log('   ├─ Font Size:', newTextElement.fontSize);
+    console.log('   ├─ Font Style:', newTextElement.fontStyle);
+    console.log('   ├─ Align:', newTextElement.align);
+    console.log('   └─ Fill:', newTextElement.fill);
+    
     setPagesWithHistory(prev => {
       const cp = JSON.parse(JSON.stringify(prev));
-      cp[activeIndex].children.push(newTextElement);
+      const pageIndex = activeIndex >= 0 && activeIndex < cp.length ? activeIndex : 0;
+      
+      // REMOVE existing subheadings first (replace behavior)
+      const existingSubheadings = cp[pageIndex].children.filter(el => el.id?.startsWith('subheading-'));
+      if (existingSubheadings.length > 0) {
+        console.log('🗑️ [GENERATE] Removing', existingSubheadings.length, 'existing subheading(s)');
+        cp[pageIndex].children = cp[pageIndex].children.filter(el => !el.id?.startsWith('subheading-'));
+      }
+      
+      cp[pageIndex].children.push(newTextElement);
+      console.log(`✅ [GENERATE] Added subheading "${text.substring(0,10)}..." to page ${pageIndex}`);
       return cp;
     });
     

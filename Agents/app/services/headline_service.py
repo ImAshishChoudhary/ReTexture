@@ -402,52 +402,65 @@ async def analyze_image_for_placement(image_base64: str, canvas_width: int, canv
         client = _init_gemini_client()
         image_bytes = _decode_base64_image(image_base64)
         
-        prompt = f"""Analyze this image for optimal text placement in a retail advertisement.
+        prompt = f"""You are an expert graphic designer analyzing this retail advertisement image for optimal text placement.
 
 Canvas dimensions: {canvas_width}px x {canvas_height}px
 
-Please identify:
-1. Where is the main subject (person/product) located? (top, center, bottom, left, right)
-2. Which areas are relatively empty/clear for text overlay?
-3. What is the dominant background color/brightness?
+## TASK: Find the best position for headline and subheading text
 
-Based on your analysis, recommend placement for:
-- HEADLINE: Short text (3-5 words), should be prominent and readable
-- SUBHEADING: Longer text (8-15 words), below or near headline
+### STEP 1: Identify the SALIENT REGION (main product/subject)
+Detect where the main product or focal point is located. Text must NEVER overlap this area.
+
+### STEP 2: Apply RULE OF THIRDS
+Divide the image into a 3x3 grid:
+- TOP THIRD (y: 0-33%): IDEAL for headlines if product is in center/bottom
+- MIDDLE THIRD (y: 33-67%): DANGER ZONE - usually contains the product, AVOID
+- BOTTOM THIRD (y: 67-100%): Good for call-to-action, but check for product overlap
+
+### STEP 3: Determine text placement using ENERGY OPTIMIZATION
+- MINIMIZE TEXT INTRUSION: Never overlap important content
+- MAXIMIZE VISUAL SPACE UTILITY: Use the largest empty area
+- ENSURE READABILITY: Choose contrasting colors
+
+### PLACEMENT ZONES (y_percent ranges):
+- SAFE TOP ZONE: y_percent = 5-20 (Headlines go here if possible)
+- SECONDARY TOP: y_percent = 20-30 (Subheadings can go here)  
+- DANGER ZONE: y_percent = 30-75 (Products usually here - AVOID!)
+- SAFE BOTTOM ZONE: y_percent = 75-95 (Bottom placement if top is blocked)
 
 Return ONLY a JSON object (no markdown, no explanation):
 {{
     "subject_position": "center-bottom",
-    "empty_zones": ["top", "bottom-left"],
+    "empty_zones": ["top"],
     "background_brightness": "dark",
     "headline": {{
-        "x": 540,
-        "y": 100,
+        "x_percent": 50,
+        "y_percent": 12,
         "align": "center",
         "fontSize": 42,
         "fontWeight": "bold",
         "color": "#FFFFFF",
         "shadow": true,
-        "shadowColor": "rgba(0,0,0,0.5)"
+        "shadowColor": "rgba(0,0,0,0.6)"
     }},
     "subheading": {{
-        "x": 540,
-        "y": 160,
+        "x_percent": 50,
+        "y_percent": 22,
         "align": "center", 
         "fontSize": 22,
         "fontWeight": "normal",
         "color": "#FFFFFF",
         "shadow": true,
-        "shadowColor": "rgba(0,0,0,0.3)"
+        "shadowColor": "rgba(0,0,0,0.4)"
     }}
 }}
 
-IMPORTANT:
-- Place text where it won't overlap with the main subject
-- Use white text (#FFFFFF) for dark backgrounds, use dark (#1a1a1a) for light backgrounds
-- Include shadow for readability over images
-- Keep headline in top third if possible, unless blocked by subject
-- Follow Tesco brand style: clean, professional, family-friendly
+CRITICAL RULES:
+1. Headline y_percent MUST be in range 5-25 (TOP SAFE ZONE) unless impossible
+2. Subheading y_percent should be 8-12% below headline
+3. NEVER place text in y_percent 35-70 (where products typically are)
+4. Use #FFFFFF (white) text for dark backgrounds with strong shadow
+5. Use #1A1A1A (dark) text for light backgrounds with subtle shadow
 """
         
         log_json("INFO", "📤 Sending smart placement request to Gemini...")
@@ -493,7 +506,7 @@ IMPORTANT:
 
 
 def _get_default_placement(canvas_width: int, canvas_height: int) -> dict:
-    """Fallback placement when AI analysis fails"""
+    """Fallback placement when AI analysis fails - uses percentage-based positioning"""
     return {
         "success": True,
         "placement": {
@@ -501,8 +514,8 @@ def _get_default_placement(canvas_width: int, canvas_height: int) -> dict:
             "empty_zones": ["top"],
             "background_brightness": "dark",
             "headline": {
-                "x": canvas_width // 2,
-                "y": int(canvas_height * 0.15),
+                "x_percent": 50,
+                "y_percent": 15,
                 "align": "center",
                 "fontSize": 42,
                 "fontWeight": "bold",
@@ -514,8 +527,8 @@ def _get_default_placement(canvas_width: int, canvas_height: int) -> dict:
                 "shadowOffsetY": 2
             },
             "subheading": {
-                "x": canvas_width // 2,
-                "y": int(canvas_height * 0.22),
+                "x_percent": 50,
+                "y_percent": 28,
                 "align": "center",
                 "fontSize": 22,
                 "fontWeight": "normal",
@@ -614,3 +627,102 @@ def reset_rate_limit(design_id: str):
         del generation_counts[design_id]
         logger.info(f"🔄 [HEADLINE SERVICE] Rate limit reset for design: {design_id}")
 
+
+# ============== FONT STYLING SERVICE ==============
+
+# Available font moods that map to frontend font config
+AVAILABLE_MOODS = ["premium", "modern", "playful", "family", "fresh", "bold", "clean", "everyday"]
+
+async def analyze_font_style(image_base64: str) -> dict:
+    """
+    🎨 AI-Powered Font Style Recommendation
+    Analyzes the product image and recommends typography styling.
+    
+    Returns mood-based font recommendation that maps to frontend config.
+    """
+    log_json("INFO", "🎨 Analyzing image for font style recommendation...")
+    
+    try:
+        client = _init_gemini_client()
+        image_bytes = _decode_base64_image(image_base64)
+        
+        prompt = f"""Analyze this retail product image and recommend typography styling.
+
+Consider:
+1. Product category (grocery, premium, fresh, household, etc.)
+2. Visual mood (bright, dark, colorful, minimal, etc.)
+3. Target audience (families, young adults, health-conscious, etc.)
+4. Brand positioning (value, premium, everyday, specialty)
+
+Choose ONE mood from: {', '.join(AVAILABLE_MOODS)}
+
+Return ONLY a JSON object (no markdown):
+{{
+    "mood": "modern",
+    "reasoning": "Brief explanation of why this mood fits",
+    "fontWeight": "semibold",
+    "letterSpacing": "normal",
+    "textTransform": "none",
+    "suggestedCase": "Title Case"
+}}
+
+Font weights: regular, medium, semibold, bold, extrabold
+Letter spacing: tight, normal, wide, extraWide
+Text transform: none, uppercase, capitalize
+"""
+        
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                        types.Part.from_text(text=prompt)
+                    ]
+                )
+            ]
+        )
+        
+        result_text = response.text.strip()
+        log_json("INFO", "📥 Font analysis response received", response_length=len(result_text))
+        
+        # Parse JSON response
+        if "{" in result_text:
+            json_start = result_text.index("{")
+            json_end = result_text.rindex("}") + 1
+            font_style = json.loads(result_text[json_start:json_end])
+            
+            # Validate mood
+            if font_style.get("mood") not in AVAILABLE_MOODS:
+                font_style["mood"] = "modern"  # Default fallback
+            
+            log_json("INFO", "✅ Font style recommended", 
+                     mood=font_style.get("mood"),
+                     weight=font_style.get("fontWeight"))
+            
+            return {
+                "success": True,
+                "fontStyle": font_style
+            }
+        else:
+            return _get_default_font_style()
+            
+    except Exception as e:
+        log_json("ERROR", f"❌ Font analysis failed: {str(e)}")
+        return _get_default_font_style()
+
+
+def _get_default_font_style() -> dict:
+    """Default font style when analysis fails"""
+    return {
+        "success": True,
+        "fontStyle": {
+            "mood": "modern",
+            "reasoning": "Default modern style for clean readability",
+            "fontWeight": "semibold",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "suggestedCase": "Title Case"
+        }
+    }

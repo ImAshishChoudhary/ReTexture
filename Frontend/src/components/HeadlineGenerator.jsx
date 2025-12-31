@@ -195,16 +195,29 @@ const HeadlineGenerator = ({
   
   // Add headline to canvas with SMART LLM PLACEMENT
   const handleAddToCanvas = useCallback(async (text, isSubheading = false) => {
-    console.log('🎯 [HEADLINE GENERATOR] handleAddToCanvas called with:', { text, isSubheading });
-    console.log('🎯 [HEADLINE GENERATOR] Canvas Size:', canvasSize);
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('🎯 [HEADLINE] ═══ STARTING HEADLINE PLACEMENT ═══');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('📝 [HEADLINE] Text:', text);
+    console.log('📝 [HEADLINE] Is Subheading:', isSubheading);
+    console.log('📐 [HEADLINE] Canvas Size:', canvasSize);
+    console.log('📸 [HEADLINE] Has Canvas Image:', !!canvasImageBase64);
+    console.log('📸 [HEADLINE] Image Base64 Length:', canvasImageBase64?.length || 0);
     
     // COMPLIANCE CHECK - Validate text before adding
+    console.log('───────────────────────────────────────────────────────────────');
+    console.log('🛡️ [HEADLINE] STEP 1: COMPLIANCE CHECK');
+    console.log('───────────────────────────────────────────────────────────────');
     const compliance = validateHeadlineText(text, isSubheading);
     const complianceStatus = formatHeadlineCompliance(compliance);
-    console.log('🛡️ [HEADLINE GENERATOR] Compliance check:', complianceStatus);
+    console.log('🛡️ [HEADLINE] Compliant:', compliance.compliant);
+    console.log('🛡️ [HEADLINE] Issues:', compliance.issues);
+    console.log('🛡️ [HEADLINE] Warnings:', compliance.warnings);
+    console.log('🛡️ [HEADLINE] Status:', complianceStatus.status);
     
     if (!compliance.compliant) {
       // HARD FAIL - Block non-compliant text
+      console.log('❌ [HEADLINE] BLOCKED - Text not compliant!');
       messageApi.error(complianceStatus.message);
       complianceStatus.details?.forEach(issue => {
         messageApi.warning(issue, 5);
@@ -214,100 +227,209 @@ const HeadlineGenerator = ({
     
     if (complianceStatus.status === 'warning') {
       // Show warnings but allow adding
+      console.log('⚠️ [HEADLINE] Warnings present but proceeding...');
       messageApi.warning(complianceStatus.message);
     }
     
-    // Get image bounds for positioning
-    const bounds = imageBounds || { 
-      x: 0, 
-      y: 0, 
-      width: canvasSize?.w || 800, 
-      height: canvasSize?.h || 600 
-    };
+    // Get RELIABLE BOUNDS - use canvas size as primary, image bounds for offset
+    console.log('───────────────────────────────────────────────────────────────');
+    console.log('📐 [HEADLINE] STEP 2: CLIENT-SIDE CANVAS ANALYSIS');
+    console.log('───────────────────────────────────────────────────────────────');
     
-    console.log('📐 [HEADLINE GENERATOR] Using bounds:', bounds);
+    // Use canvas size for width/height, image bounds for offset if available
+    const canvasWidth = canvasSize?.w || 800;
+    const canvasHeight = canvasSize?.h || 600;
     
-    // Calculate RELIABLE CENTERED POSITIONING within image
-    const padding = Math.max(20, bounds.width * 0.05);
-    const textWidth = bounds.width * 0.8; // 80% of image width
-    const fontSize = isSubheading 
-      ? Math.max(16, Math.min(28, bounds.width / 25))
-      : Math.max(24, Math.min(48, bounds.width / 15));
+    console.log('📐 [HEADLINE] Canvas Size:', canvasWidth, 'x', canvasHeight);
+    console.log('📐 [HEADLINE] Image Bounds:', imageBounds);
     
-    // Position: Centered horizontally, top 15% for headline, 25% for subheading
-    const xPos = bounds.x + (bounds.width - textWidth) / 2;
-    const yPos = isSubheading 
-      ? bounds.y + bounds.height * 0.25
-      : bounds.y + bounds.height * 0.12;
+    let position;
     
-    // Default styling (will be enhanced by LLM if available)
-    let position = {
-      x: xPos,
-      y: yPos,
-      width: textWidth,
-      fontSize: fontSize,
-      color: '#FFFFFF',
-      align: 'center',
-      shadowEnabled: true,
-      shadowColor: 'rgba(0,0,0,0.6)',
-      shadowBlur: 4,
-      fontWeight: isSubheading ? 'normal' : 'bold'
-    };
-    
-    // TRY LLM-POWERED SMART PLACEMENT for better styling
+    // === PRIMARY: Client-Side Canvas Analysis (No API Call!) ===
     if (canvasImageBase64) {
       try {
-        console.log('🤖 [HEADLINE GENERATOR] Calling LLM Smart Placement API...');
-        const { getSmartPlacement } = await import('../api/headlineApi');
-        const result = await getSmartPlacement({
-          imageBase64: canvasImageBase64,
-          canvasWidth: bounds.width,
-          canvasHeight: bounds.height
-        });
+        console.log('🔍 [HEADLINE] Running client-side canvas analysis...');
+        const startTime = performance.now();
         
-        if (result.success && result.placement) {
-          const llmPos = isSubheading 
-            ? result.placement.subheading 
-            : result.placement.headline;
-          
-          // Merge LLM styling with our reliable positioning
-          position = {
-            ...position,
-            color: llmPos.color || position.color,
-            shadowEnabled: llmPos.shadow !== false,
-            shadowColor: llmPos.shadowColor || position.shadowColor,
-            align: llmPos.align || 'center',
-            fontWeight: llmPos.fontWeight || position.fontWeight,
-          };
-          
-          console.log('✅ [HEADLINE GENERATOR] Enhanced with LLM styling:', position);
-          console.log('🎨 [HEADLINE GENERATOR] Subject position:', result.placement.subject_position);
-        }
+        // TextPlacementService analyzes:
+        // 1. Divide image into 3x3 grid
+        // 2. Calculate brightness & variance for each cell
+        // 3. Score cells (top preference, center avoidance, logo avoidance)
+        // 4. Pick the best zone for text
+        const analysis = await TextPlacementService.analyze(
+          canvasImageBase64,
+          canvasWidth,
+          canvasHeight,
+          logoPosition || 'bottom-right',
+          imageBounds
+        );
+        
+        const endTime = performance.now();
+        console.log('🔍 [HEADLINE] Analysis Time:', (endTime - startTime).toFixed(0), 'ms');
+        
+        // Get the appropriate position (headline or subheading)
+        const smartPos = isSubheading ? analysis.subheading : analysis.headline;
+        
+        console.log('🔍 [HEADLINE] Smart Analysis Result:');
+        console.log('   ├─ Zone:', smartPos.zone || 'auto');
+        console.log('   ├─ X:', smartPos.x?.toFixed(0));
+        console.log('   ├─ Y:', smartPos.y?.toFixed(0));
+        console.log('   ├─ Width:', smartPos.width?.toFixed(0));
+        console.log('   ├─ Font Size:', smartPos.fontSize);
+        console.log('   ├─ Color:', smartPos.color);
+        console.log('   └─ Align:', smartPos.align);
+        
+        position = {
+          x: smartPos.x,
+          y: smartPos.y,
+          width: smartPos.width,
+          fontSize: smartPos.fontSize,
+          color: smartPos.color || '#FFFFFF',
+          align: smartPos.align || 'center',
+          shadowEnabled: smartPos.shadowEnabled !== false,
+          shadowColor: smartPos.shadowColor || 'rgba(0,0,0,0.6)',
+          shadowBlur: smartPos.shadowBlur || 4,
+          fontWeight: isSubheading ? 'normal' : 'bold',
+          fontFamily: 'Inter, Arial, sans-serif',
+          isSmart: true
+        };
+        
+        console.log('✅ [HEADLINE] Client-side analysis SUCCESS!');
+        
       } catch (e) {
-        console.warn('⚠️ [HEADLINE GENERATOR] LLM styling failed, using defaults', e);
+        console.warn('⚠️ [HEADLINE] Canvas analysis failed:', e.message);
+        console.log('📐 [HEADLINE] Falling back to default positioning...');
+        position = null; // Will use fallback below
       }
     }
     
-    console.log('� [HEADLINE GENERATOR] Final position:', position);
-    console.log('📐 [HEADLINE GENERATOR] Using bounds:', bounds);
+    // === FALLBACK: Simple reliable positioning ===
+    if (!position) {
+      console.log('📐 [HEADLINE] Using fallback positioning (no canvas analysis)');
+      const paddingPercent = 0.10;
+      const textWidth = canvasWidth * 0.80;
+      const xPos = canvasWidth * paddingPercent;
+      const yPercent = isSubheading ? 0.22 : 0.08;
+      const yPos = canvasHeight * yPercent;
+      const fontSize = isSubheading 
+        ? Math.max(18, Math.min(28, canvasWidth / 30))
+        : Math.max(28, Math.min(48, canvasWidth / 18));
+      
+      position = {
+        x: xPos,
+        y: yPos,
+        width: textWidth,
+        fontSize: fontSize,
+        color: '#FFFFFF',
+        align: 'center',
+        shadowEnabled: true,
+        shadowColor: 'rgba(0,0,0,0.6)',
+        shadowBlur: 4,
+        fontWeight: isSubheading ? 'normal' : 'bold',
+        fontFamily: 'Inter, Arial, sans-serif',
+        isSmart: false
+      };
+    }
     
-    console.log('📝 [HEADLINE GENERATOR] Calling parent callback with:', { text, position, isSubheading });
+    console.log('📐 [HEADLINE] Final Position:', position);
+    
+    // 2. TRY AI-POWERED FONT STYLING (Gemini Vision) - ENHANCE FONT
+    console.log('───────────────────────────────────────────────────────────────');
+    console.log('🎨 [HEADLINE] STEP 4: AI FONT STYLING (Gemini Vision)');
+    console.log('───────────────────────────────────────────────────────────────');
+    
+    if (canvasImageBase64) {
+      try {
+        console.log('🎨 [HEADLINE] Calling getFontStyle API...');
+        const startTime = performance.now();
+        const { getFontStyle } = await import('../api/headlineApi');
+        const { getStyleFromMood } = await import('../config/fonts');
+        
+        const fontResult = await getFontStyle({ imageBase64: canvasImageBase64 });
+        const endTime = performance.now();
+        
+        console.log('🎨 [HEADLINE] API Response Time:', (endTime - startTime).toFixed(0), 'ms');
+        console.log('🎨 [HEADLINE] API Success:', fontResult.success);
+        console.log('🎨 [HEADLINE] Full Font Result:', JSON.stringify(fontResult, null, 2));
+        
+        if (fontResult.success && fontResult.fontStyle) {
+          const mood = fontResult.fontStyle.mood;
+          const fontStyle = getStyleFromMood(mood, isSubheading);
+          
+          console.log('🎨 [HEADLINE] Font Style Details:');
+          console.log('   ├─ Detected Mood:', mood);
+          console.log('   ├─ AI Reasoning:', fontResult.fontStyle.reasoning);
+          console.log('   ├─ Mapped Font Family:', fontStyle.fontFamily);
+          console.log('   ├─ Mapped Font Weight:', fontStyle.fontWeight);
+          console.log('   ├─ Letter Spacing:', fontStyle.letterSpacing);
+          console.log('   └─ Text Transform:', fontStyle.textTransform);
+          
+          // Apply AI-recommended font styling
+          position = {
+            ...position,
+            fontFamily: fontStyle.fontFamily,
+            fontWeight: fontStyle.fontWeight,
+            letterSpacing: fontStyle.letterSpacing,
+            textTransform: fontStyle.textTransform,
+          };
+          
+          console.log('✅ [HEADLINE] AI Font Style Applied Successfully!');
+        } else {
+          console.warn('⚠️ [HEADLINE] Font styling returned no data, using defaults');
+        }
+      } catch (e) {
+        console.error('❌ [HEADLINE] Font styling failed!');
+        console.error('❌ [HEADLINE] Error:', e.message);
+        console.warn('⚠️ [HEADLINE] Using default font styling...');
+      }
+    } else {
+      console.warn('⚠️ [HEADLINE] No canvas image available, skipping font styling');
+    }
+    
+    // FINAL POSITION SUMMARY
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('📍 [HEADLINE] ═══ FINAL POSITION SUMMARY ═══');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('📍 [HEADLINE] Position X:', position.x);
+    console.log('📍 [HEADLINE] Position Y:', position.y);
+    console.log('📍 [HEADLINE] Width:', position.width);
+    console.log('📍 [HEADLINE] Font Size:', position.fontSize);
+    console.log('📍 [HEADLINE] Font Family:', position.fontFamily);
+    console.log('📍 [HEADLINE] Font Weight:', position.fontWeight);
+    console.log('📍 [HEADLINE] Color:', position.color);
+    console.log('📍 [HEADLINE] Align:', position.align);
+    console.log('📍 [HEADLINE] Shadow Enabled:', position.shadowEnabled);
+    console.log('📍 [HEADLINE] Shadow Color:', position.shadowColor);
+    console.log('📍 [HEADLINE] Letter Spacing:', position.letterSpacing);
+    console.log('📍 [HEADLINE] Text Transform:', position.textTransform);
+    console.log('═══════════════════════════════════════════════════════════════');
+    
+    // STEP 5: ADD TO CANVAS
+    console.log('───────────────────────────────────────────────────────────────');
+    console.log('🖼️ [HEADLINE] STEP 5: ADDING TO CANVAS');
+    console.log('───────────────────────────────────────────────────────────────');
+    console.log('🖼️ [HEADLINE] Calling parent callback...');
+    console.log('🖼️ [HEADLINE] Is Subheading:', isSubheading);
     
     if (isSubheading) {
       if (typeof onAddSubheading === 'function') {
         onAddSubheading(text, position);
-        console.log('✅ [HEADLINE GENERATOR] onAddSubheading called');
+        console.log('✅ [HEADLINE] onAddSubheading called successfully!');
       } else {
-        console.error('❌ [HEADLINE GENERATOR] onAddSubheading is NOT a function');
+        console.error('❌ [HEADLINE] onAddSubheading is NOT a function!');
       }
     } else {
       if (typeof onAddHeadline === 'function') {
         onAddHeadline(text, position);
-        console.log('✅ [HEADLINE GENERATOR] onAddHeadline called');
+        console.log('✅ [HEADLINE] onAddHeadline called successfully!');
       } else {
-        console.error('❌ [HEADLINE GENERATOR] onAddHeadline is NOT a function');
+        console.error('❌ [HEADLINE] onAddHeadline is NOT a function!');
       }
     }
+    
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('🎉 [HEADLINE] ═══ HEADLINE PLACEMENT COMPLETE ═══');
+    console.log('═══════════════════════════════════════════════════════════════');
     
     messageApi.success(`Added "${text.substring(0, 20)}..." to canvas`);
   }, [canvasSize, canvasImageBase64, onAddHeadline, onAddSubheading, logoPosition, imageBounds]);

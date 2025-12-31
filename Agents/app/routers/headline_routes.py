@@ -212,6 +212,24 @@ async def smart_placement(request: SmartPlacementRequest):
         )
 
 
+@router.post("/font-style")
+async def analyze_font_style(request: KeywordSuggestionRequest):
+    """
+    🎨 AI-powered font style recommendation.
+    Analyzes product image and recommends typography styling (mood, weight, spacing).
+    """
+    logger.info("🎨 [HEADLINE API] POST /font-style")
+    
+    try:
+        result = await headline_service.analyze_font_style(
+            image_base64=request.image_base64
+        )
+        return result
+    except Exception as e:
+        logger.error(f"❌ [HEADLINE API] Font style analysis failed: {str(e)}")
+        return headline_service._get_default_font_style()
+
+
 @router.get("/health")
 async def health_check():
     """Health check for headline service"""

@@ -173,52 +173,87 @@ export class TextPlacementService {
     return pixelCount > 0 ? sumSquaredDiff / pixelCount : 0;
   }
 
-  static scoreCell(cell, brightness, variance, logoPosition) {
+  /**
+   * Score a cell for text placement using aesthetic principles
+   * Research-based: Rule of Thirds, Visual Balance, Low Variance
+   */
+  static scoreCell(cell, brightness, variance, logoPosition, gridRows = 3, gridCols = 3) {
     let score = 50; // Base score
     
-    // 1. Position preference
-    if (cell.row === 0) score += 40;      // Top Row: Ideal for headlines
-    if (cell.row === 1) score += 10;      // Middle: Acceptable
-    if (cell.row === 2) score -= 20;      // Bottom: Often has footer/logo
-
-    // 2. Center Avoidance (Subject typically in center)
-    if (cell.row === 1 && cell.col === 1) score -= 50; 
+    // =====================================================
+    // 1. RULE OF THIRDS - Text on 1/3 lines is more aesthetic
+    // =====================================================
+    // For a 3x3 grid, row 0 is top third, row 1 is middle third, row 2 is bottom third
+    // Headlines look best at row 0 (top third line)
+    if (cell.row === 0) score += 45;      // TOP THIRD: Ideal for headlines
+    if (cell.row === 2) score += 15;      // BOTTOM THIRD: Good for CTA
+    // Middle third is less desirable (usually has product)
     
-    // 3. DYNAMIC LOGO AVOIDANCE
-    // Map logo position strings to grid coordinates
+    // =====================================================
+    // 2. VISUAL BALANCE - Edge positions create natural hierarchy
+    // =====================================================
+    // Side columns create visual tension with product in center
+    if (cell.col === 0) score += 10;      // Left side - good for LTR reading
+    if (cell.col === 2) score += 8;       // Right side - acceptable
+    // Center column conflicts with typical product placement
+    if (cell.col === 1 && cell.row === 1) score -= 60; // Center-center: AVOID
+    
+    // =====================================================
+    // 3. GOLDEN RATIO INTERSECTION POINTS (bonus zones)
+    // =====================================================
+    // Grid intersections at ~38% and ~62% are visually pleasing
+    // For 3x3, corners of center cell approximate this
+    // Top-left quadrant (row 0, col 0-1) gets a bonus
+    if (cell.row === 0 && cell.col <= 1) score += 12;
+    
+    // =====================================================
+    // 4. LOGO AVOIDANCE (Brand Safety)
+    // =====================================================
     const logoMap = {
       'top-left': { r: 0, c: 0 },
       'top-right': { r: 0, c: 2 },
       'bottom-left': { r: 2, c: 0 },
-      'bottom-right': { r: 2, c: 2 } // Default
+      'bottom-right': { r: 2, c: 2 } // Default for Tesco/Drinkaware
     };
     
     const logoLoc = logoMap[logoPosition] || logoMap['bottom-right'];
     
-    // STRICT Check: Is this cell the logo cell?
+    // NUCLEAR: Never place text on logo
     if (cell.row === logoLoc.r && cell.col === logoLoc.c) {
-      score -= 1000; // NUCLEAR OPTION: Do not place text here.
+      score -= 1000;
     }
     
-    // Proximity Check: Adjacent cells might also be risky
+    // Adjacent cells also risky
     if (Math.abs(cell.row - logoLoc.r) <= 1 && Math.abs(cell.col - logoLoc.c) <= 1) {
-       // Only penalize if it's the SAME row or SAME column (direct overlap risk)
-       // Diagonals are usually fine
-       if (cell.row === logoLoc.r || cell.col === logoLoc.c) {
-         score -= 20; 
-       }
+      if (cell.row === logoLoc.r || cell.col === logoLoc.c) {
+        score -= 25;
+      }
     }
 
-    // 4. Uniformity (Low variance = readable text)
-    // Variance 0-0.25. Low variance is good (+30 max)
-    score += Math.max(0, 30 - (variance * 100));
+    // =====================================================
+    // 5. UNIFORMITY - Low variance = clean text background
+    // =====================================================
+    // Variance 0-0.25 typical. Low variance means uniform area = good for text
+    const uniformityBonus = Math.max(0, 35 - (variance * 120));
+    score += uniformityBonus;
 
-    // 5. Contrast preference (Dark/Light extremes are better than mid-gray)
-    if (brightness < 0.3) score += 15;    // Dark background (White text)
-    if (brightness > 0.7) score += 10;    // Light background (Dark text)
+    // =====================================================
+    // 6. CONTRAST - Extreme brightness is better for readability
+    // =====================================================
+    if (brightness < 0.25) score += 20;    // Dark background (White text pops)
+    else if (brightness > 0.75) score += 15;    // Light background (Dark text works)
+    else score -= 10; // Mid-gray is harder for text visibility
+
+    // =====================================================
+    // 7. BREATHING ROOM - Edge cells have natural margins
+    // =====================================================
+    // Cells at image edges have built-in margins from image boundaries
+    if (cell.row === 0 || cell.row === gridRows - 1) score += 5;  // Top/bottom edge
+    if (cell.col === 0 || cell.col === gridCols - 1) score += 5;  // Left/right edge
     
     return { ...cell, brightness, variance, score };
   }
+
 
   static calculateCoordinates(zone, canvasW, canvasH, imageBounds = null) {
     // Use provided bounds or default to full canvas

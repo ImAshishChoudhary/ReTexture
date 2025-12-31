@@ -264,3 +264,50 @@ export async function getSmartPlacement({ imageBase64, canvasWidth, canvasHeight
     };
   }
 }
+
+/**
+ * 🎨 AI-Powered Font Style Recommendation
+ * Analyzes product image and recommends typography styling
+ * @param {Object} params
+ * @param {string} params.imageBase64 - Base64 encoded image
+ * @returns {Promise<{success: boolean, fontStyle: Object}>}
+ */
+export async function getFontStyle({ imageBase64 }) {
+  console.log('🎨 [HEADLINE API] Getting AI font style recommendation...');
+  
+  try {
+    const response = await fetch(`${AGENT_API_URL}/api/headline/font-style`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image_base64: imageBase64
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API error: ${response.status} - ${error}`);
+    }
+    
+    const data = await response.json();
+    console.log('🎨 [HEADLINE API] Font style received:', data);
+    return data;
+    
+  } catch (error) {
+    console.error('❌ [HEADLINE API] Font style analysis failed:', error);
+    // Return default font style on error
+    return {
+      success: true,
+      fontStyle: {
+        mood: 'modern',
+        reasoning: 'Default style due to API error',
+        fontWeight: 'semibold',
+        letterSpacing: 'normal',
+        textTransform: 'none',
+        suggestedCase: 'Title Case'
+      }
+    };
+  }
+}
