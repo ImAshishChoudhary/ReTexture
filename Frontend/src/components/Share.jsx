@@ -2,7 +2,8 @@ import { useEditorStore } from "../store/useEditorStore";
 import { Button, Space, Popover, Tooltip, message, Modal } from "antd";
 import jsPDF from "jspdf";
 import { useState } from "react";
-import { validateCanvas, formatValidationForUI } from "../utils/complianceChecker";
+import { validateCanvas } from "../compliance/checker";
+import { applyAutoFixes } from "../compliance/corrector";
 import ValidationChecklist from "./ValidationChecklist";
 
 import { BsDownload } from "react-icons/bs";
@@ -116,22 +117,44 @@ export default function Share({ stageRef }) {
    * Run Tesco compliance validation before export
    * Returns true if compliant, false if blocked
    */
-  const runComplianceCheck = () => {
-    const result = validateCanvas(canvasSize, editorPages, {
-      hasClubcardTile: false, // Could be detected from elements
-      isAlcohol: false,
+  // Format validation result for UI display
+  const formatValidationResultForUI = (result) => {
+    return {
+      compliant: result.compliant,
+      score: result.score,
+      hardFails: result.violations.map(v => ({
+        rule: v.rule,
+        message: v.message,
+        fix: v.autoFixable ? 'Auto-fix available' : 'Manual fix required',
+        elementId: v.elementId
+      })),
+      warnings: result.warnings || []
+    };
+  };
+
+  const runComplianceCheck = async () => {
+    console.log('🚀 [SHARE] Triggering compliance check from Share.jsx');
+    console.log('📦 EditorPages:', editorPages.length, 'Canvas:', canvasSize);
+    
+    const result = await validateCanvas(editorPages, canvasSize, {
       formatType: 'social',
+      isAlcohol: false,
+      enableFaceDetection: true
     });
 
+    console.log('📊 [SHARE] Validation result:', result);
+
     if (!result.compliant) {
-      setValidationData(formatValidationForUI(result));
+      console.log('❌ [SHARE] Design is non-compliant, showing modal');
+      setValidationData(formatValidationResultForUI(result));
       setShowValidationModal(true);
       return false;
     }
 
+    console.log('✅ [SHARE] Design is compliant!');
     // Show passed rules briefly
     message.success({
-      content: `✓ Compliance passed (${result.passed.length} rules)`,
+      content: `✓ Compliance passed! (Score: ${result.score}/100)`,
       duration: 2,
     });
     return true;
@@ -141,6 +164,45 @@ export default function Share({ stageRef }) {
     setShowValidationModal(false);
     setValidationData(null);
     setPendingExport(null);
+  };
+
+  const handleAutoFix = () => {
+    setExporting(true);
+    message.loading({ content: "Applying compliance fixes...", key: "autofix" });
+    
+    try {
+      // Get current validation result
+      const validationResult = validateCanvas(editorPages, canvasSize, { formatType: 'social' });
+      
+      // Apply auto-fixes
+      const { correctedPages, fixesApplied, remainingIssues } = applyAutoFixes(
+        editorPages,
+        canvasSize,
+        validationResult.violations
+      );
+      
+      const { setEditorPages } = useEditorStore.getState();
+      setEditorPages(correctedPages);
+      
+      message.success({ content: `Applied ${fixesApplied} compliance fixes!`, key: "autofix" });
+      
+      // Check if now compliant
+      if (remainingIssues.length === 0) {
+        handleCloseValidation();
+        message.success("Design is now compliant! You can export.");
+      } else {
+        setValidationData(formatValidationResultForUI({
+          compliant: false,
+          violations: remainingIssues,
+          warnings: []
+        }));
+      }
+    } catch (error) {
+      console.error("Auto-fix error:", error);
+      message.error({ content: "Failed to apply fixes", key: "autofix" });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const downloadBlob = (blob, name) => {
@@ -356,7 +418,11 @@ export default function Share({ stageRef }) {
           Your creative has compliance issues that must be fixed before export.
           Tesco Retail Media requires all creatives to meet advertising guidelines.
         </p>
-        <ValidationChecklist validationData={validationData} />
+        <ValidationChecklist 
+          validationData={validationData} 
+          onRequestChanges={handleAutoFix}
+          loading={exporting}
+        />
       </Modal>
     </Tooltip>
   );

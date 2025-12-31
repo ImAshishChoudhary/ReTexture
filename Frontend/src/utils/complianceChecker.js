@@ -97,7 +97,7 @@ function hexToRgb(hex) {
 /**
  * Calculate contrast ratio between two colors (WCAG formula)
  */
-function getContrastRatio(color1, color2) {
+export function getContrastRatio(color1, color2) {
   const l1 = getLuminance(color1);
   const l2 = getLuminance(color2);
   const lighter = Math.max(l1, l2);
@@ -327,4 +327,85 @@ export function formatValidationForUI(validationResult) {
     issues: validationResult.hardFails.map(f => f.detail),
     suggestions: validationResult.hardFails.map(f => f.fix),
   };
+}
+/**
+ * Auto-corrects canvas elements to meet compliance standards
+ * 
+ * @param {Array} editorPages - Current pages array
+ * @param {Object} canvasSize - { w, h }
+ * @param {Object} options - { formatType } 
+ * @returns {Array} - New editorPages array with corrections
+ */
+export function applyAutoFixes(editorPages, canvasSize, options = {}) {
+  const { w, h } = canvasSize;
+  const aspectRatio = w / h;
+  const is916 = Math.abs(aspectRatio - (9/16)) < 0.05;
+  const formatType = options.formatType || 'social';
+  const minSize = MIN_FONT_SIZES[formatType] || MIN_FONT_SIZES.default;
+  const background = editorPages[0]?.background || '#ffffff';
+
+  return editorPages.map(page => {
+    let newChildren = (page.children || []).map(el => {
+      let newEl = { ...el };
+
+      // 1. Fix Font Size
+      if (newEl.type === 'text') {
+        const currentSize = newEl.fontSize || 16;
+        if (currentSize < minSize) {
+          newEl.fontSize = minSize;
+        }
+      }
+
+      // 2. Fix Safe Zones (9:16)
+      if (is916) {
+        const { topClear, bottomClear } = SAFE_ZONES['9:16'];
+        const elTop = newEl.y || 0;
+        const elHeight = newEl.height || (newEl.type === 'text' ? (newEl.fontSize * 1.2) : 50);
+        const elBottom = elTop + elHeight;
+
+        if (elTop < topClear) {
+          newEl.y = topClear + 5;
+        } else if (elBottom > h - bottomClear) {
+          newEl.y = h - bottomClear - elHeight - 5;
+        }
+      }
+
+      // 3. Fix Contrast
+      if (newEl.type === 'text' || newEl.type === 'icon') {
+        const color = newEl.fill || '#000000';
+        const ratio = getContrastRatio(color, background);
+        if (ratio < WCAG_AA_RATIO) {
+          const whiteRatio = getContrastRatio('#ffffff', background);
+          const blackRatio = getContrastRatio('#000000', background);
+          newEl.fill = whiteRatio > blackRatio ? '#ffffff' : '#000000';
+        }
+      }
+
+      return newEl;
+    });
+
+    // 4. Add missing Tesco Tag if missing
+    const hasValidTag = newChildren.some(el => {
+      const text = (el.text || '').toLowerCase().trim();
+      return ALLOWED_TAGS.some(tag => text.includes(tag));
+    });
+
+    if (!hasValidTag && is916) {
+      const tagColor = getContrastRatio('#ffffff', background) > getContrastRatio('#000000', background) ? '#ffffff' : '#000000';
+      newChildren.push({
+        id: `auto-tag-${Date.now()}`,
+        type: 'text',
+        text: 'Available at Tesco',
+        fontSize: minSize,
+        fontWeight: 'bold',
+        x: 50,
+        y: h - 180, // Safe spot within guideline but not obscured
+        fill: tagColor,
+        fontFamily: 'Inter, Arial, sans-serif',
+        align: 'center'
+      });
+    }
+
+    return { ...page, children: newChildren };
+  });
 }

@@ -1,12 +1,18 @@
-import { useState } from "react";
-import { Button, message, Input, Divider, Flex, Image, Skeleton } from "antd";
+import { useState, useCallback, useEffect } from "react";
+import { Button, message, Input, Divider, Flex, Image, Skeleton, Collapse } from "antd";
 import { useEditorStore } from "../store/useEditorStore";
+import HeadlineGenerator from "./HeadlineGenerator";
 
 import { CiCirclePlus } from "react-icons/ci";
 import { MdAutoAwesome } from "react-icons/md";
+import { BulbOutlined } from "@ant-design/icons";
 
-// Direct Agent API (on port 8000)
-const AGENT_URL = "http://localhost:8000";
+// Simple unique ID generator (no external dependency)
+const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+
+// Direct Agent API (on port 8001)
+const AGENT_URL = "http://localhost:8001";
 
 export default function Generate({ setPagesWithHistory }) {
   const { 
@@ -21,12 +27,38 @@ export default function Generate({ setPagesWithHistory }) {
   const [userprompt, setUserprompt] = useState("");
   const [variations, setVariations] = useState([]);
   const [loadingStyles, setLoadingStyles] = useState([]); // Track which styles are loading
+  const [canvasImageBase64, setCanvasImageBase64] = useState(null);
 
-  // Get selected element from current page
+  // Get selected element from current page - MUST be defined BEFORE callbacks that use it
   const activePage = editorPages?.[activeIndex] || { children: [] };
   const selectedEl = activePage?.children?.find((el) => el?.id === selectedUniqueId);
 
-  // Convert blob/http URL to base64
+  // Find first image on canvas
+  const firstImageOnCanvas = activePage?.children?.find(el => el.type === 'image');
+
+  // Auto-detect and capture canvas image when it changes
+  useEffect(() => {
+    const loadCanvasImage = async () => {
+      if (firstImageOnCanvas?.src && !canvasImageBase64) {
+        console.log('🔄 [GENERATE] Auto-loading canvas image...');
+        try {
+          const response = await fetch(firstImageOnCanvas.src);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            console.log('✅ [GENERATE] Canvas image loaded automatically');
+            setCanvasImageBase64(reader.result);
+          };
+          reader.readAsDataURL(blob);
+        } catch (e) {
+          console.error('Failed to auto-load canvas image:', e);
+        }
+      }
+    };
+    loadCanvasImage();
+  }, [firstImageOnCanvas?.src]);
+
+  // Convert blob/http URL to base64 (defined early for use in callbacks)
   const urlToBase64 = async (url) => {
     const response = await fetch(url);
     const blob = await response.blob();
@@ -37,6 +69,79 @@ export default function Generate({ setPagesWithHistory }) {
       reader.readAsDataURL(blob);
     });
   };
+
+  // Helper function to get canvas image as base64
+  const getCanvasImage = useCallback(async () => {
+    // Find the first image element on canvas
+    const imageElement = activePage?.children?.find(el => el.type === 'image');
+    if (imageElement?.src) {
+      try {
+        const base64 = await urlToBase64(imageElement.src);
+        setCanvasImageBase64(base64);
+        return base64;
+      } catch (e) {
+        console.error('Failed to convert image to base64:', e);
+      }
+    }
+    return null;
+  }, [activePage]);
+
+  // Add headline to canvas
+  const handleAddHeadline = useCallback((text, position) => {
+    console.log('➕ [GENERATE] Adding headline to canvas:', text);
+    const newTextElement = {
+      id: `headline-${generateId()}`,
+      type: 'text',
+      text: text,
+      x: position?.x || canvasSize?.w / 2 || 400,
+      y: position?.y || 80,
+      fontSize: position?.fontSize || 36,
+      fill: position?.color || '#FFFFFF',
+      fontFamily: 'Arial',
+      fontWeight: 'bold',
+      align: position?.align || 'center',
+      width: canvasSize?.w - 40 || 760,
+      draggable: true,
+    };
+    
+    setPagesWithHistory(prev => {
+      const cp = JSON.parse(JSON.stringify(prev));
+      cp[activeIndex].children.push(newTextElement);
+      return cp;
+    });
+    
+    message.success('Headline added to canvas!');
+  }, [canvasSize, setPagesWithHistory, activeIndex]);
+
+  // Add subheading to canvas
+  const handleAddSubheading = useCallback((text, position) => {
+    console.log('➕ [GENERATE] Adding subheading to canvas:', text);
+    const newTextElement = {
+      id: `subheading-${generateId()}`,
+      type: 'text',
+      text: text,
+      x: position?.x || canvasSize?.w / 2 || 400,
+      y: position?.y || 140,
+      fontSize: position?.fontSize || 20,
+      fill: position?.color || '#FFFFFF',
+      fontFamily: 'Arial',
+      fontWeight: 'normal',
+      align: position?.align || 'center',
+      width: canvasSize?.w - 40 || 760,
+      draggable: true,
+    };
+    
+    setPagesWithHistory(prev => {
+      const cp = JSON.parse(JSON.stringify(prev));
+      cp[activeIndex].children.push(newTextElement);
+      return cp;
+    });
+    
+    message.success('Subheading added to canvas!');
+  }, [canvasSize, setPagesWithHistory, activeIndex]);
+
+
+
 
   // Get base64 data without prefix
   const getBase64Data = (dataUrl) => {
@@ -521,6 +626,30 @@ export default function Generate({ setPagesWithHistory }) {
           }
         `}</style>
       </div>
+
+      {/* Headline Generator Section */}
+      <Divider style={{ margin: "12px 0", borderColor: "#eee" }}>
+        <BulbOutlined style={{ marginRight: 4, color: "#faad14" }} />
+        AI Headline Generator
+      </Divider>
+      
+      <HeadlineGenerator
+        canvasImageBase64={canvasImageBase64}
+        canvasSize={canvasSize}
+        onAddHeadline={handleAddHeadline}
+        onAddSubheading={handleAddSubheading}
+        designId={`design-${Date.now()}`}
+      />
+      
+      {/* Refresh canvas image button */}
+      <Button
+        size="small"
+        block
+        onClick={getCanvasImage}
+        style={{ marginTop: 8, fontSize: 12 }}
+      >
+        🔄 Refresh Canvas Image
+      </Button>
     </>
   );
 }

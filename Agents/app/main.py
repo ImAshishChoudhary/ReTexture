@@ -10,11 +10,20 @@ import base64
 import json
 import logging
 import os
+from app.core.models import ValidationRequest, ValidationResponse
+from app.core.prompts import COMPLIANCE_SYSTEM_PROMPT
+from app.routers import headline_routes  # NEW: Headline generator routes
+from google import genai
+from google.genai import types
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Agent API")
+
+# Register headline routes
+app.include_router(headline_routes.router)
+
 
 # CORS
 app.add_middleware(
@@ -290,6 +299,64 @@ async def generate_variations_stream(req: VariationsRequest):
             "X-Accel-Buffering": "no"
         }
     )
+
+
+@app.post("/validate")
+async def validate_canvas(req: ValidationRequest) -> ValidationResponse:
+    """
+    Validate and auto-correct canvas HTML/CSS for Tesco compliance.
+    """
+    print("=" * 60)
+    print("[AGENT] /validate endpoint called")
+    print("=" * 60)
+    
+    try:
+        # 1. Decode base64 canvas String
+        decoded_bytes = base64.b64decode(req.canvas)
+        canvas_content = decoded_bytes.decode('utf-8')
+        print(f"[AGENT] Decoded canvas content: {len(canvas_content)} chars")
+
+        # 2. Call Gemini for validation & correction
+        client = genai.Client(
+            vertexai=True,
+            project=os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2"),
+            location=os.getenv("GCP_LOCATION", "us-central1")
+        )
+        
+        prompt = f"{COMPLIANCE_SYSTEM_PROMPT}\n\nCanvas HTML/CSS:\n{canvas_content}"
+        
+        print("[AGENT] Calling Gemini for compliance check...")
+        response = client.models.generate_content(
+            model=os.getenv("GEMINI_MODEL_ID", "gemini-2.0-flash-exp"),
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
+        )
+        
+        print("[AGENT] Gemini response received")
+        result = json.loads(response.text)
+        
+        # 3. Format response
+        return ValidationResponse(
+            canvas=result.get("corrected_canvas", req.canvas),
+            compliant=result.get("compliant", False),
+            issues=result.get("issues", []),
+            suggestions=result.get("suggestions", [])
+        )
+        
+    except Exception as e:
+        print(f"[AGENT] ❌ Error in /validate: {e}")
+        import traceback
+        print(traceback.format_exc())
+        
+        # Return a non-compliant fallback if AI fails
+        return ValidationResponse(
+            canvas=req.canvas,
+            compliant=False,
+            issues=[{"type": "system_error", "message": f"Validation engine error: {str(e)}", "fix": "Try again later"}],
+            suggestions=["Ensure the canvas content is valid HTML/CSS"]
+        )
 
 
 if __name__ == "__main__":

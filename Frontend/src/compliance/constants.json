@@ -1,0 +1,38 @@
+{
+  "SAFE_ZONES": {
+    "9:16": {
+      "topClear": 200,
+      "bottomClear": 250
+    }
+  },
+  "MIN_FONT_SIZES": {
+    "social": 20,
+    "brand": 20,
+    "checkout_double": 20,
+    "checkout_single": 10,
+    "says": 12,
+    "default": 20
+  },
+  "HEADLINE": {
+    "MIN_FONT_SIZE": 24,
+    "REQUIRED": true
+  },
+  "WCAG": {
+    "MIN_RATIO": 4.5,
+    "LARGE_TEXT_RATIO": 3.0,
+    "LARGE_TEXT_SIZE": 18
+  },
+  "BLOCKED_KEYWORDS": [
+    "win",
+    "prize",
+    "competition",
+    "free delivery",
+    "50% off",
+    "% off"
+  ],
+  "ALLOWED_TAGS": [
+    "only at tesco",
+    "available at tesco",
+    "tesco"
+  ]
+}

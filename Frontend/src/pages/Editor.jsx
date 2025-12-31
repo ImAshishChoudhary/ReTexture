@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Stage, Layer, Line } from "react-konva";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageContainer, ProLayout } from '@ant-design/pro-components';
-import { Button, ColorPicker, Dropdown, Flex, Tooltip, Tour, Typography, Modal, Card, List, Spin } from "antd";
+import { Button, ColorPicker, Dropdown, Flex, Tooltip, Tour, Typography, Modal, Card, List, Spin, message } from "antd";
 
 import { useEditorStore } from '../store/useEditorStore';
 
@@ -19,6 +19,8 @@ import UndoRedo from '../components/UndoRedo';
 import AddPage from '../components/AddPage';
 import EditorColorPicker from '../components/EditorColorPicker';
 import { serializeToHTML, logToConsole } from '../utils/serializeToHTML';
+import { validateCanvas } from '../compliance/checker';
+import { applyAutoFixes } from '../compliance/corrector';
 
 
 export default function Editor() {
@@ -162,32 +164,94 @@ export default function Editor() {
     const [validationResult, setValidationResult] = useState(null);
     const [showValidationModal, setShowValidationModal] = useState(false);
     const [validationLoading, setValidationLoading] = useState(false);
+    const [rawViolations, setRawViolations] = useState([]);
 
     const handleValidateCanvas = async () => {
+        console.log('🚀 [EDITOR] Validate button clicked');
+        console.log('📦 Editor Pages:', editorPages);
+        console.log('📐 Canvas Size:', canvasSize);
+        
         setValidationLoading(true);
-        const serialized = serializeToHTML(editorPages, activeIndex, canvasSize);
-        const canvasString = `${serialized.html}\n\n<style>\n${serialized.css}\n</style>`;
-        // Handle Unicode characters by converting to UTF-8 bytes first
-        const base64Canvas = btoa(unescape(encodeURIComponent(canvasString)));
-        console.log('Base64 Encoded Canvas:', base64Canvas);
         
         try {
-            const response = await fetch(`${import.meta.env.VITE_VALIDATION_API_URL}/process`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    canvas: base64Canvas
-                })
+            // Use our new client-side compliance checker (now async for face detection)
+            console.log('🔍 [EDITOR] Starting client-side validation');
+            const result = await validateCanvas(editorPages, canvasSize, {
+                formatType: 'social',
+                isAlcohol: false,
+                enableFaceDetection: true
             });
             
-            const result = await response.json();
-            console.log('Validation result:', result);
-            setValidationResult(result);
+            console.log('✅ [EDITOR] Validation complete:', result);
+            
+            // Store raw violations for auto-fix
+            setRawViolations(result.violations);
+            
+            // Transform result to match the expected format for the modal
+            const formattedResult = {
+                compliant: result.compliant,
+                score: result.score,
+                issues: result.violations.map(v => ({
+                    type: v.rule,
+                    message: v.message,
+                    fix: v.autoFixable ? 'Auto-fix available' : 'Manual fix required',
+                    severity: v.severity,
+                    autoFixable: v.autoFixable
+                })),
+                warnings: result.warnings.map(w => w.message),
+                summary: result.summary
+            };
+            
+            setValidationResult(formattedResult);
             setShowValidationModal(true);
+            
+            if (result.compliant) {
+                message.success(`✓ Design is compliant! Score: ${result.score}/100`);
+            } else {
+                message.warning(`Found ${result.violations.length} compliance issues. Score: ${result.score}/100`);
+            }
         } catch (error) {
-            console.error('Validation failed:', error);
+            console.error('❌ [EDITOR] Validation failed:', error);
+            message.error('Validation failed: ' + error.message);
+        } finally {
+            setValidationLoading(false);
+        }
+    };
+
+    const handleAutoFix = () => {
+        console.log('🔧 [EDITOR] Auto-fix triggered');
+        setValidationLoading(true);
+        
+        try {
+            console.log(`📋 [EDITOR] Applying fixes for ${rawViolations.length} violations`);
+            
+            const { correctedPages, fixesApplied, remainingIssues } = applyAutoFixes(
+                editorPages,
+                canvasSize,
+                rawViolations
+            );
+            
+            console.log(`✅ [EDITOR] Auto-fix complete: ${fixesApplied} fixes applied, ${remainingIssues.length} remaining`);
+            
+            // Update the canvas with corrected pages
+            setEditorPages(correctedPages);
+            setPushHistory(correctedPages);
+            
+            message.success(`Applied ${fixesApplied} compliance fixes!`);
+            
+            // Close modal if fully compliant
+            if (remainingIssues.length === 0) {
+                console.log('🎉 [EDITOR] All issues resolved, closing modal');
+                setShowValidationModal(false);
+                message.success("Design is now compliant!");
+            } else {
+                console.log('⚠️ [EDITOR] Some issues remain, re-validating');
+                // Re-run validation to update the modal
+                handleValidateCanvas();
+            }
+        } catch (error) {
+            console.error("❌ [EDITOR] Auto-fix error:", error);
+            message.error("Failed to apply fixes: " + error.message);
         } finally {
             setValidationLoading(false);
         }
@@ -749,13 +813,60 @@ export default function Editor() {
             <Modal
                 title="Validation Results"
                 open={showValidationModal}
-                onCancel={() => setShowValidationModal(false)}
+                onCancel={() => {
+                    console.log('🚪 [EDITOR MODAL] Closing validation modal');
+                    setShowValidationModal(false);
+                }}
                 width={1000}
-                footer={[
-                    <Button key="close" onClick={() => setShowValidationModal(false)}>
-                        Close
-                    </Button>
-                ]}
+                footer={(() => {
+                    console.log('🔍 [EDITOR MODAL] Rendering footer...');
+                    console.log('  ↳ validationResult exists?', !!validationResult);
+                    console.log('  ↳ validationResult:', validationResult);
+                    
+                    if (validationResult) {
+                        console.log('  ↳ compliant?', validationResult.compliant);
+                        console.log('  ↳ issues:', validationResult.issues);
+                        console.log('  ↳ issues.length:', validationResult.issues?.length);
+                        
+                        const hasAutoFixable = validationResult.issues?.some(i => i.autoFixable);
+                        console.log('  ↳ hasAutoFixable?', hasAutoFixable);
+                        
+                        const showButton = validationResult && !validationResult.compliant && hasAutoFixable;
+                        console.log('  ↳ SHOW AUTO-FIX BUTTON?', showButton);
+                        
+                        if (showButton) {
+                            console.log('✅ [EDITOR MODAL] AUTO-FIX BUTTON WILL RENDER');
+                        } else {
+                            console.log('❌ [EDITOR MODAL] AUTO-FIX BUTTON WILL NOT RENDER');
+                            console.log('  ↳ Reason: compliant=' + validationResult.compliant + ', hasAutoFixable=' + hasAutoFixable);
+                        }
+                    } else {
+                        console.log('❌ [EDITOR MODAL] No validationResult - button will not render');
+                    }
+                    
+                    return [
+                        validationResult && !validationResult.compliant && validationResult.issues.some(i => i.autoFixable) && (
+                            <Button 
+                                key="autofix" 
+                                type="primary"
+                                onClick={() => {
+                                    console.log('🔧 [EDITOR MODAL] Auto-Fix button clicked!');
+                                    handleAutoFix();
+                                }}
+                                loading={validationLoading}
+                                style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                            >
+                                Auto-Fix Compliance
+                            </Button>
+                        ),
+                        <Button key="close" onClick={() => {
+                            console.log('🚪 [EDITOR MODAL] Close button clicked');
+                            setShowValidationModal(false);
+                        }}>
+                            Close
+                        </Button>
+                    ];
+                })()}
             >
                 {validationResult && (
                     <Flex vertical gap={16}>
@@ -778,6 +889,28 @@ export default function Editor() {
                                 )}
                             />
                         </Card>
+                        
+                        {validationResult.warnings && validationResult.warnings.length > 0 && (
+                            <Card title="⚠️ Warnings (Non-Blocking)" size="small" style={{ borderColor: '#faad14' }}>
+                                <List
+                                    size="small"
+                                    dataSource={validationResult.warnings || []}
+                                    renderItem={(warning, idx) => (
+                                        <List.Item>
+                                            <List.Item.Meta
+                                                title={<span style={{ color: '#faad14' }}>PEOPLE_DETECTED</span>}
+                                                description={
+                                                    <>
+                                                        <p><strong>Warning:</strong> {typeof warning === 'string' ? warning : warning.message || JSON.stringify(warning)}</p>
+                                                        <p><em>This is a warning only and does not block export.</em></p>
+                                                    </>
+                                                }
+                                            />
+                                        </List.Item>
+                                    )}
+                                />
+                            </Card>
+                        )}
                         
                         <Card title="Validated HTML Preview" size="small">
                             <div 
