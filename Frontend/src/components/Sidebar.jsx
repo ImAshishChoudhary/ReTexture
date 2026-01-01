@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Card, Empty, Flex, Space, Typography } from 'antd';
 import { useEditorStore } from '../store/useEditorStore';
 
@@ -24,6 +23,7 @@ import EditingPopup from './EditingPopup';
 import Layer from './Layer';
 import Shape from './Shape';
 import TescoLogo from './TescoLogo';
+import TescoTag from './TescoTag';
 
 
 
@@ -110,6 +110,7 @@ const Sidebar = ({ selectedEl, setElement, activePage, setPagesWithHistory, open
                             {normalizedPath === "upload" && (
                               <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
                                 <TescoLogo setPagesWithHistory={setPagesWithHistory} />
+                                <TescoTag setPagesWithHistory={setPagesWithHistory} />
                                 <Upload setPagesWithHistory={setPagesWithHistory} />
                               </div>
                             )}

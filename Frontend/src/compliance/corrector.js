@@ -62,6 +62,18 @@ export function applyAutoFixes(editorPages, canvasSize, violations) {
         fixesApplied++;
         break;
         
+      case 'CTA_NOT_ALLOWED':
+        console.log(`  ↳ Removing CTA element ${violation.elementId}`);
+        correctedPages = removeElement(correctedPages, violation.elementId);
+        fixesApplied++;
+        break;
+        
+      case 'CONTRAST_APCA_WARNING':
+        console.log(`  ↳ Fixing APCA contrast warning for ${violation.elementId}`);
+        correctedPages = fixContrast(correctedPages, violation);
+        fixesApplied++;
+        break;
+        
       default:
         console.log(`  ⚠️ Unknown rule type: ${violation.rule}`);
         unfixedViolations.push(violation);
@@ -154,5 +166,12 @@ function updateElement(pages, elementId, updater) {
     children: (page.children || []).map(el => 
       el.id === elementId ? updater(el) : el
     )
+  }));
+}
+
+function removeElement(pages, elementId) {
+  return pages.map(page => ({
+    ...page,
+    children: (page.children || []).filter(el => el.id !== elementId)
   }));
 }

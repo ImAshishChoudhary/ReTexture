@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Text, Transformer, Rect } from "react-konva";
 import { useKonvaSnapping } from "use-konva-snapping";
+import { Html } from "react-konva-utils";
 
 export default function SelectableText({ shape, selected, onSelect, onChange, stageRef}) {
     const ref = useRef();
@@ -41,68 +42,6 @@ export default function SelectableText({ shape, selected, onSelect, onChange, st
         }
     }, [selected, isEditing, shape, draftText, onChange]);
 
-    useEffect(() => {
-        let interval;
-        if (isEditing) {
-            interval = setInterval(() => {
-                setShowCursor(prev => !prev);
-            }, 500);
-        } else {
-            setShowCursor(false);
-        }
-        return () => clearInterval(interval);
-    }, [isEditing]);
-
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (!isEditing || !ref.current || !selected) return;
-            e.preventDefault();
-            
-            let newText = draftText;
-            let newPos = cursorPosition;
-
-            if (e.key === "Backspace") {
-                if (cursorPosition > 0) {
-                    newText = draftText.slice(0, cursorPosition - 1) + draftText.slice(cursorPosition);
-                    newPos = cursorPosition - 1;
-                }
-            } else if (e.key === "Delete") {
-                if (cursorPosition < draftText.length) {
-                    newText = draftText.slice(0, cursorPosition) + draftText.slice(cursorPosition + 1);
-                }
-            } else if (e.key === "ArrowLeft") {
-                newPos = Math.max(0, cursorPosition - 1);
-                newText = draftText;
-            } else if (e.key === "ArrowRight") {
-                newPos = Math.min(draftText.length, cursorPosition + 1);
-                newText = draftText;
-            } else if (e.key === "Home") {
-                newPos = 0;
-                newText = draftText;
-            } else if (e.key === "End") {
-                newPos = draftText.length;
-                newText = draftText;
-            } else if (e.key === "Enter") {
-                newText = draftText.slice(0, cursorPosition) + "\n" + draftText.slice(cursorPosition);
-                newPos = cursorPosition + 1;
-            } else if (e.key === "Escape") {
-                commitEdit();
-                return;
-            } else if (e.key.length === 1) {
-                newText = draftText.slice(0, cursorPosition) + e.key + draftText.slice(cursorPosition);
-                newPos = cursorPosition + 1;
-            } else {
-                return;
-            }
-            
-            setDraftText(newText);
-            setCursorPosition(newPos);
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isEditing, draftText, cursorPosition, selected]);
-
     const commitEdit = () => {
         if (!isEditing) return;
         setIsEditing(false);
@@ -110,32 +49,6 @@ export default function SelectableText({ shape, selected, onSelect, onChange, st
         if (shape?.text !== draftText) {
             onChange({ ...shape, text: draftText });
         }
-    };
-
-    const getCursorX = () => {
-        if (!ref.current || !isEditing) return 0;
-        
-        const textBeforeCursor = draftText.slice(0, cursorPosition);
-        const lastLineBreak = textBeforeCursor.lastIndexOf('\n');
-        const currentLineText = lastLineBreak >= 0 
-            ? textBeforeCursor.slice(lastLineBreak + 1) 
-            : textBeforeCursor;
-        
-        const context = document.createElement('canvas').getContext('2d');
-        context.font = `${shape?.bold ? 'bold ' : ''}${shape?.italic ? 'italic ' : ''}${shape?.fontSize || 16}px ${shape?.fontFamily || 'Arial'}`;
-        const width = context.measureText(currentLineText).width;
-        
-        return width;
-    };
-
-    const getCursorY = () => {
-        if (!ref.current || !isEditing) return 0;
-        
-        const textBeforeCursor = draftText.slice(0, cursorPosition);
-        const lineCount = (textBeforeCursor.match(/\n/g) || []).length;
-        const fontSize = shape?.fontSize || 16;
-        
-        return lineCount * fontSize * 1.2;
     };
 
     useEffect(() => {
@@ -173,99 +86,144 @@ export default function SelectableText({ shape, selected, onSelect, onChange, st
 
     return (
         <>
-            <Text
-                ref={ref}
-                {...shape}
-                
-                textDecoration={[
-                    shape?.underline ? "underline" : "",
-                    shape?.lineThrough ? "line-through" : "",
-                ].join(" ")}
+            {isEditing ? (
+                <Html groupProps={{ x: shape.x, y: shape.y }} divProps={{ style: { opacity: 1 } }}>
+                    <textarea
+                        value={draftText}
+                        onChange={(e) => {
+                            setDraftText(e.target.value);
+                            // Auto-resize height
+                            e.target.style.height = 'auto';
+                            e.target.style.height = e.target.scrollHeight + 'px';
+                        }}
+                        autoFocus
+                        onBlur={() => {
+                            commitEdit();
+                            setIsEditing(false);
+                        }}
+                        onKeyDown={(e) => {
+                             // Shift+Enter for new line, Enter to commit
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                commitEdit();
+                                setIsEditing(false);
+                            }
+                        }}
+                        style={{
+                            width: shape.width + 'px',
+                            minHeight: shape.fontSize + 'px',
+                            fontSize: shape.fontSize + 'px',
+                            fontFamily: shape.fontFamily,
+                            fontWeight: shape.bold ? 'bold' : 'normal',
+                            fontStyle: shape.italic ? 'italic' : 'normal',
+                            color: shape.fill,
+                            textAlign: shape.align || 'left',
+                            lineHeight: 1.2,
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none',
+                            resize: 'none',
+                            overflow: 'hidden',
+                            padding: 0,
+                            margin: 0,
+                            boxSizing: 'border-box',
+                            textTransform: shape.textTransform || 'none',
+                            letterSpacing: (shape.letterSpacing || 0) + 'px'
+                        }}
+                    />
+                </Html>
+            ) : null}
 
-                fontStyle={`${shape?.bold ? "bold " : ""}${shape?.italic ? "italic" : ""}`}
-                text={draftText}
-                draggable={!isEditing===!shape?.locked}
-                visible={shape?.visible}
-                onMouseDown={(e) => {
-                    if (shape?.locked) return;
-                    if (isEditing) {
-                        commitEdit();
-                    }
-                    onSelect(e);
-                }}
-                onTap={(e) => {
-                    if (shape?.locked) return;
-                    if (isEditing) {
-                        commitEdit();
-                    }
-                    onSelect(e);
-                }}
-                onDblClick={() =>{
-                    isLocked() 
-                    setIsEditing(true)
+            {!isEditing && (
+                <Text
+                    ref={ref}
+                    {...shape}
+                    
+                    textDecoration={[
+                        shape?.underline ? "underline" : "",
+                        shape?.lineThrough ? "line-through" : "",
+                    ].join(" ")}
+
+                    fontStyle={`${shape?.bold ? "bold " : ""}${shape?.italic ? "italic" : ""}`}
+                    text={draftText}
+                    draggable={!isEditing && !shape?.locked}
+                    visible={shape?.visible && !isEditing}
+                    onMouseDown={(e) => {
+                        if (shape?.locked) return;
+                        if (isEditing) {
+                            commitEdit();
+                        }
+                        onSelect(e);
                     }}
-                onDblTap={() =>{
-                    isLocked()
-                     setIsEditing(true)
-                     }}
-                onDragMove={(e) => {
-                      isLocked(); 
-                    handleDragging(e);
-                    e.target.position({ x: e.target.x(), y: e.target.y() });
-                }}
-                onDragEnd={(e) => {
-                     isLocked(); 
-                    commitEdit();
-                    handleDragEnd(e)
-                    onChange({ ...shape, x: e.target.x(), y: e.target.y() });
-                }}
-                onTransformEnd={() => {
-                    isLocked(); 
-                    const node = ref.current;
-                    const scaleX = node.scaleX();
-                    const scaleY = node.scaleY();
-                    const rotation = node.rotation();
+                    onTap={(e) => {
+                        if (shape?.locked) return;
+                        if (isEditing) {
+                            commitEdit();
+                        }
+                        onSelect(e);
+                    }}
+                    onDblClick={() =>{
+                        console.log('SelectableText: Double Click Detected!', shape?.id);
+                        if (shape?.locked) {
+                            console.log('SelectableText: Shape is locked');
+                            return;
+                        }
+                        console.log('SelectableText: Entering edit mode');
+                        setIsEditing(true);
+                    }}
+                    onDblTap={() =>{
+                        if (shape?.locked) return;
+                        setIsEditing(true);
+                    }}
+                    onDragMove={(e) => {
+                        if (shape?.locked) return;
+                        handleDragging(e);
+                        e.target.position({ x: e.target.x(), y: e.target.y() });
+                    }}
+                    onDragEnd={(e) => {
+                        if (shape?.locked) return;
+                        commitEdit();
+                        handleDragEnd(e)
+                        onChange({ ...shape, x: e.target.x(), y: e.target.y() });
+                    }}
+                    onTransformEnd={() => {
+                        if (shape?.locked) return;
+                        const node = ref.current;
+                        const scaleX = node.scaleX();
+                        const scaleY = node.scaleY();
+                        const rotation = node.rotation();
 
-                    node.scaleX(1);
-                    node.scaleY(1);
+                        node.scaleX(1);
+                        node.scaleY(1);
 
-                    const width = Math.max(20, node.width() * scaleX);
-                    const fontSize = Math.max(6, (shape?.fontSize || 16) * scaleY);
+                        const width = Math.max(20, node.width() * scaleX);
+                        const fontSize = Math.max(6, (shape?.fontSize || 16) * scaleY);
 
-                    commitEdit();
-                    onChange({
-                        ...shape,
-                        x: node.x(),
-                        y: node.y(),
-                        width: width,
-                        fontSize: Math.round(fontSize),
-                        rotation: Math.round(rotation),
-                    });
-                }}
+                        commitEdit();
+                        onChange({
+                            ...shape,
+                            x: node.x(),
+                            y: node.y(),
+                            width: width,
+                            fontSize: Math.round(fontSize),
+                            rotation: Math.round(rotation),
+                        });
+                    }}
 
-                onMouseEnter={(e) => {
-                      isLocked()
-                    const stage = e.target.getStage();
-                    if (stage) stage.container().style.cursor = "move";
-                }}
-                onMouseLeave={(e) => {
-                    isLocked() 
-                    const stage = e.target.getStage();
-                    if (stage) stage.container().style.cursor = "default";
-                }}
-            />
-
-            {isEditing && showCursor && selected && (
-                <Rect
-                    ref={cursorRef}
-                    x={(shape?.x || 0) + getCursorX()}
-                    y={(shape?.y || 0) + getCursorY()}
-                    width={2}
-                    height={shape?.fontSize || 16}
-                    fill="#FF6B35"
-                    listening={false}
+                    onMouseEnter={(e) => {
+                        if (shape?.locked) return;
+                        const stage = e.target.getStage();
+                        if (stage) stage.container().style.cursor = "move";
+                    }}
+                    onMouseLeave={(e) => {
+                        if (shape?.locked) return;
+                        const stage = e.target.getStage();
+                        if (stage) stage.container().style.cursor = "default";
+                    }}
                 />
             )}
+
+            {/* Remove custom cursor rendering as we use native textarea */}
 
             {selected && !isEditing && (
                 <Transformer

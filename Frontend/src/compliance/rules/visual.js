@@ -1,60 +1,107 @@
 /**
- * Visual rules: Contrast, Drinkaware logo, Face Detection
+ * Visual rules: Contrast (APCA + WCAG 2.1), Drinkaware logo, Face Detection
  */
 
 import CONSTANTS from '../constants.json';
-import { getContrastRatio } from '../utils/color';
-// Face detection is loaded dynamically to avoid breaking the module if TF.js fails
+import { 
+  checkAPCAContrast, 
+  checkWCAGContrast,
+  suggestAccessibleColor 
+} from '../utils/color';
 
+/**
+ * Check text contrast using APCA algorithm (with WCAG 2.1 fallback)
+ * Context-aware: considers font size, weight, and type
+ * 
+ * @param {Array} elements - Canvas elements
+ * @param {string} background - Background color (hex)
+ * @returns {Array} Array of contrast violations
+ */
 export function checkContrast(elements, background) {
-  console.log('🔍 [VISUAL RULES] checkContrast called');
+  console.log('🔍 [VISUAL RULES - APCA] checkContrast called');
   console.log('  ↳ Elements count:', elements.length);
   console.log('  ↳ Background:', background);
   
   const violations = [];
   const checkableElements = elements.filter(el => el.type === 'text' || el.type === 'icon');
-  console.log(`  ↳ Checkable elements (text/icon): ${checkableElements.length}`);
+  console.log(`  ↳ Checkable text/icon elements: ${checkableElements.length}`);
   
   checkableElements.forEach((el, index) => {
     const color = el.fill || '#000000';
     const fontSize = el.fontSize || 16;
+    const fontWeight = el.bold ? 700 : (el.fontWeight || 400);
     
-    console.log(`  🔍 Checking element ${index + 1}/${checkableElements.length}: ${el.id}`);
-    console.log(`    ↳ Color: ${color}, Font size: ${fontSize}px`);
+    console.log(`  🔍 [${index + 1}/${checkableElements.length}] Checking: ${el.id}`);
+    console.log(`    ↳ Color: ${color}, Size: ${fontSize}px, Weight: ${fontWeight}`);
     
-    const ratio = getContrastRatio(color, background);
-    const minRatio = fontSize >= CONSTANTS.WCAG.LARGE_TEXT_SIZE
-      ? CONSTANTS.WCAG.LARGE_TEXT_RATIO
-      : CONSTANTS.WCAG.MIN_RATIO;
+    // Build context for APCA
+    const context = {
+      fontSize,
+      fontWeight,
+      usage: fontSize >= 24 ? 'heading' : 'body'
+    };
     
-    console.log(`    ↳ Contrast ratio: ${ratio.toFixed(2)}:1, Required: ${minRatio}:1`);
+    // Check using APCA (primary) and WCAG 2.1 (fallback)
+    const apcaResult = checkAPCAContrast(color, background, context);
+    const wcagResult = checkWCAGContrast(color, background, context);
     
-    if (ratio < minRatio) {
-      // Determine better color
-      const whiteRatio = getContrastRatio('#ffffff', background);
-      const blackRatio = getContrastRatio('#000000', background);
-      const fixColor = whiteRatio > blackRatio ? '#ffffff' : '#000000';
+    console.log(`    ↳ APCA: ${apcaResult.contrast}Lc (required: ${apcaResult.required}Lc) - ${apcaResult.passes ? 'PASS' : 'FAIL'}`);
+    console.log(`    ↳ WCAG 2.1: ${wcagResult.contrast}:1 (required: ${wcagResult.required}:1) - ${wcagResult.passes ? 'PASS' : 'FAIL'}`);
+    
+    // Fail if BOTH algorithms fail (defensive approach)
+    if (!apcaResult.passes && !wcagResult.passes) {
+      // Suggest best color using APCA-optimized algorithm
+      const suggestion = suggestAccessibleColor(background, context);
       
-      console.log(`    ⚠️ CONTRAST FAIL! Auto-fix color: ${fixColor}`);
-      console.log(`      ↳ White ratio: ${whiteRatio.toFixed(2)}, Black ratio: ${blackRatio.toFixed(2)}`);
+      console.log(`    ⚠️ CONTRAST FAIL (both APCA & WCAG)`);
+      console.log(`      ↳ Suggested fix: ${suggestion.color} (${suggestion.contrast}Lc)`);
       
       violations.push({
         elementId: el.id,
         rule: 'CONTRAST_FAIL',
         severity: 'hard',
-        message: `Contrast ratio ${ratio.toFixed(2)}:1 is below ${minRatio}:1 requirement`,
+        message: `Contrast ${apcaResult.contrast}Lc is below ${apcaResult.required}Lc requirement (APCA). WCAG 2.1: ${wcagResult.contrast}:1 vs ${wcagResult.required}:1`,
         autoFixable: true,
         autoFix: {
           property: 'fill',
-          value: fixColor
+          value: suggestion.color
+        },
+        metadata: {
+          currentAPCA: apcaResult.contrast,
+          requiredAPCA: apcaResult.required,
+          currentWCAG: wcagResult.contrast,
+          requiredWCAG: wcagResult.required,
+          suggestedAPCA: suggestion.contrast
         }
       });
+    } else if (!apcaResult.passes) {
+      // Warning: Passes WCAG but fails APCA (possible false positive)
+      console.log(`    ⚠️ APCA FAIL (but WCAG passes - possible WCAG 2.1 false positive)`);
+      
+      violations.push({
+        elementId: el.id,
+        rule: 'CONTRAST_APCA_WARNING',
+        severity: 'warning',
+        message: `Passes WCAG 2.1 (${wcagResult.contrast}:1) but fails APCA (${apcaResult.contrast}Lc < ${apcaResult.required}Lc). May be a WCAG 2.1 false positive.`,
+        autoFixable: true,
+        autoFix: {
+          property: 'fill',
+          value: suggestAccessibleColor(background, context).color
+        },
+        metadata: {
+          apcaContrast: apcaResult.contrast,
+          wcagContrast: wcagResult.contrast
+        }
+      });
+    } else {
+      console.log(`    ✅ PASS (both algorithms)`);
     }
   });
   
   console.log(`✅ checkContrast complete: ${violations.length} violations`);
   return violations;
 }
+
 
 export function checkDrinkawareLogo(elements, isAlcohol = false) {
   console.log('🔍 [VISUAL RULES] checkDrinkawareLogo called');

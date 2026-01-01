@@ -43,6 +43,18 @@ export async function validateCanvas(editorPages, canvasSize, options = {}) {
   console.log(`  ↳ Font sizes: ${fontSizeViolations.length} violations`);
   violations.push(...fontSizeViolations);
   
+  const ctaViolations = layoutRules.checkCTA(allElements);
+  console.log(`  ↳ CTA elements: ${ctaViolations.length} violations`);
+  violations.push(...ctaViolations);
+  
+  const valueTileViolations = layoutRules.checkValueTiles(allElements);
+  console.log(`  ↳ Value tiles: ${valueTileViolations.length} violations`);
+  violations.push(...valueTileViolations);
+  
+  const packshotSafeZoneViolations = layoutRules.checkPackshotSafeZone(allElements, formatType);
+  console.log(`  ↳ Packshot safe zones: ${packshotSafeZoneViolations.length} violations`);
+  violations.push(...packshotSafeZoneViolations);
+  
   console.log('🎨 Running visual rules...');
   // Visual rules
   const contrastViolations = visualRules.checkContrast(allElements, background);

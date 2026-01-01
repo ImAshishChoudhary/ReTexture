@@ -17,6 +17,10 @@ import {
 } from '../api/headlineApi';
 import { TextPlacementService } from '../services/textPlacementService';
 import { validateHeadlineText, formatHeadlineCompliance } from '../utils/complianceChecker';
+import { useEditorStore } from '../store/useEditorStore';
+
+// Import compliance-aware layout engine for zone validation
+import { getZones, isInNoGoZone, validatePlacement } from '../compliance/utils/layoutEngine';
 
 const { Option } = Select;
 
@@ -44,6 +48,10 @@ const HeadlineGenerator = ({
   const [campaignType, setCampaignType] = useState(null);
   const [headlines, setHeadlines] = useState([]);
   const [subheadings, setSubheadings] = useState([]);
+  
+  // Editor Store - for finding existing headline when placing subheading
+  const editorPages = useEditorStore((state) => state.editorPages);
+  const activeIndex = useEditorStore((state) => state.activeIndex);
   
   // AntD Message Hook
   const [messageApi, contextHolder] = message.useMessage();
@@ -245,8 +253,125 @@ const HeadlineGenerator = ({
     
     let position;
     
+    // === CHECK FOR EXISTING TEXT ELEMENTS ===
+    let existingHeadline = null;
+    let existingSubheading = null;
+    const page = editorPages?.[activeIndex];
+    
+    if (page && page.children) {
+      existingHeadline = page.children.find(child => 
+        child.id?.startsWith('headline-') && child.type === 'text' && !child.id?.includes('sub')
+      );
+      existingSubheading = page.children.find(child => 
+        child.id?.startsWith('subheading-') && child.type === 'text'
+      );
+    }
+    
+    console.log('🔍 [TEXT] Existing headline:', existingHeadline?.id || 'none');
+    console.log('🔍 [TEXT] Existing subheading:', existingSubheading?.id || 'none');
+    
+    // === HEADLINE: Position relative to existing subheading ===
+    if (!isSubheading && existingSubheading) {
+      console.log('📐 [HEADLINE] Positioning above existing subheading');
+      
+      const fontSize = Math.max(28, Math.min(52, canvasWidth / 16));
+      // Use provided text to estimate height
+      const headlineText = text || 'Headline';
+      
+      const avgCharWidth = fontSize * 0.55;
+      const textWidth = existingSubheading.width; // Match width
+      const charsPerLine = Math.max(10, Math.floor(textWidth / avgCharWidth));
+      const estimatedLines = Math.max(1, Math.ceil(headlineText.length / charsPerLine));
+      
+      const lineHeight = fontSize * 1.3;
+      const headlineHeight = lineHeight * estimatedLines;
+      
+      // Gap
+      const GOLDEN_RATIO = 1.618;
+      const goldenGap = fontSize / GOLDEN_RATIO;
+      const gap = Math.max(20, goldenGap);
+      
+      // Top of subheading - gap - headline height
+      const bottomOfHeadline = existingSubheading.y - gap;
+      const topOfHeadline = bottomOfHeadline - headlineHeight;
+      
+      // Create position object
+      position = {
+        x: existingSubheading.x,
+        y: Math.max(20, topOfHeadline), // Ensure not off-screen
+        width: existingSubheading.width,
+        fontSize: fontSize,
+        color: existingSubheading.fill || '#FFFFFF',
+        align: existingSubheading.align || 'center',
+        shadowEnabled: true,
+        shadowColor: 'rgba(0,0,0,0.5)',
+        shadowBlur: 4,
+        fontWeight: 'bold',
+        fontFamily: existingSubheading.fontFamily || 'Inter, Arial, sans-serif',
+        isSmart: true
+      };
+      console.log('✅ [HEADLINE] Positioned above subheading at:', position.y);
+    }
+    // === SUBHEADING: Position relative to existing headline ===
+    if (isSubheading && existingHeadline) {
+      console.log('📐 [SUBHEADING] Positioning below existing headline');
+      console.log('📐 [SUBHEADING] Headline details:', {
+        y: existingHeadline.y,
+        fontSize: existingHeadline.fontSize,
+        width: existingHeadline.width,
+        text: existingHeadline.text?.substring(0, 30) + '...'
+      });
+      
+      // Calculate ACTUAL headline height (accounting for text wrapping)
+      const fontSize = existingHeadline.fontSize || 42;
+      const textWidth = existingHeadline.width || canvasWidth * 0.8;
+      const headlineText = existingHeadline.text || '';
+      
+      // MORE GENEROUS character width estimate (typical proportional font)
+      // Using 0.6 * fontSize as average char width is more accurate
+      const avgCharWidth = fontSize * 0.55;
+      const charsPerLine = Math.max(10, Math.floor(textWidth / avgCharWidth));
+      const estimatedLines = Math.max(1, Math.ceil(headlineText.length / charsPerLine));
+      
+      // Calculate headline height with GENEROUS line spacing (1.4 for multi-line)
+      const lineHeight = fontSize * 1.4;
+      const headlineHeight = lineHeight * estimatedLines;
+      
+      // GOLDEN RATIO GAP between headline and subheading
+      const GOLDEN_RATIO = 1.618;
+      const goldenGap = fontSize / GOLDEN_RATIO; // ~0.618 * fontSize
+      const subheadingGap = Math.max(20, goldenGap); // At least 20px gap
+      
+      // Position subheading below headline with proper gap
+      const headlineBottom = existingHeadline.y + headlineHeight;
+      
+      console.log('📐 [SUBHEADING] Calculation:', {
+        estimatedLines,
+        headlineHeight,
+        headlineBottom,
+        goldenGap: goldenGap.toFixed(1),
+        subheadingGap
+      });
+      
+      position = {
+        x: existingHeadline.x,
+        y: headlineBottom + subheadingGap,
+        width: existingHeadline.width,
+        fontSize: Math.round(fontSize * 0.5), // 50% of headline font (2:1 ratio)
+        color: existingHeadline.fill || '#FFFFFF',
+        align: existingHeadline.align || 'center',
+        shadowEnabled: existingHeadline.shadowEnabled !== false,
+        shadowColor: existingHeadline.shadowColor || 'rgba(0,0,0,0.5)',
+        shadowBlur: 3,
+        fontWeight: 'normal',
+        fontFamily: existingHeadline.fontFamily || 'Inter, Arial, sans-serif',
+        isSmart: true
+      };
+      
+      console.log('✅ [SUBHEADING] Final Y position:', position.y);
+    }
     // === PRIMARY: Client-Side Canvas Analysis (No API Call!) ===
-    if (canvasImageBase64) {
+    else if (canvasImageBase64) {
       try {
         console.log('🔍 [HEADLINE] Running client-side canvas analysis...');
         const startTime = performance.now();
@@ -332,6 +457,66 @@ const HeadlineGenerator = ({
     }
     
     console.log('📐 [HEADLINE] Final Position:', position);
+    
+    // === ZONE VALIDATION: Ensure text is in compliant content zone ===
+    const zones = getZones(canvasWidth, canvasHeight, '9:16');
+    const textRect = {
+      x: position.x,
+      y: position.y,
+      width: position.width || 200,
+      height: position.fontSize * 2 // Estimate text height
+    };
+    
+    if (isInNoGoZone(textRect, zones)) {
+      console.log('⚠️ [HEADLINE] Text is in NO-GO ZONE! Adjusting...');
+      const contentZone = zones.content;
+      
+      // Clamp Y to content zone
+      if (position.y < contentZone.y) {
+        console.log(`🔧 [HEADLINE] Moving Y from ${position.y} to ${contentZone.y + 20}`);
+        position.y = contentZone.y + 20;
+      }
+      if (position.y + textRect.height > contentZone.y + contentZone.height) {
+        console.log(`🔧 [HEADLINE] Moving Y up to avoid bottom zone`);
+        position.y = contentZone.y + contentZone.height - textRect.height - 20;
+      }
+    } else {
+      console.log('✅ [HEADLINE] Position is in compliant zone');
+    }
+    
+    // === LOGO COLLISION DETECTION ===
+    // Find logo on canvas and adjust text position if overlapping
+    if (page && page.children) {
+      const logo = page.children.find(child => child.id?.startsWith('logo-'));
+      
+      if (logo) {
+        console.log('🏪 [HEADLINE] Logo detected at:', { x: logo.x, y: logo.y, w: logo.width, h: logo.height });
+        
+        // Calculate text bounding box
+        const textHeight = position.fontSize * 2; // Estimate text height
+        const textBottom = position.y + textHeight;
+        const textRight = position.x + position.width;
+        
+        // Check for collision (any overlap)
+        const horizontalOverlap = 
+          position.x < logo.x + logo.width &&
+          textRight > logo.x;
+        const verticalOverlap = 
+          position.y < logo.y + logo.height &&
+          textBottom > logo.y;
+        
+        if (horizontalOverlap && verticalOverlap) {
+          console.log('⚠️ [HEADLINE] COLLISION with logo detected!');
+          
+          // Adjust text to avoid logo - move UP above the logo
+          const safeY = Math.max(20, logo.y - textHeight - 20); // 20px above logo top
+          console.log('🔧 [HEADLINE] Adjusting Y from', position.y, 'to', safeY);
+          position.y = safeY;
+        } else {
+          console.log('✅ [HEADLINE] No collision with logo');
+        }
+      }
+    }
     
     // 2. TRY AI-POWERED FONT STYLING (Gemini Vision) - ENHANCE FONT
     console.log('───────────────────────────────────────────────────────────────');

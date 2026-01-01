@@ -253,125 +253,157 @@ export class TextPlacementService {
     
     return { ...cell, brightness, variance, score };
   }
-
-
+  /**
+   * Calculate AESTHETIC coordinates using design principles
+   * - Golden Ratio (φ = 1.618) for spacing
+   * - Rule of Thirds for positioning
+   * - Visual Hierarchy (2:1 headline:subheading ratio)
+   * - Proper breathing room and margins
+   * - COLUMN-BASED LAYOUT to avoid product overlap
+   */
   static calculateCoordinates(zone, canvasW, canvasH, imageBounds = null) {
-    // Use provided bounds or default to full canvas
     const bounds = imageBounds || { x: 0, y: 0, width: canvasW, height: canvasH };
     
-    // Determine text color based on brightness
+    // === DESIGN CONSTANTS ===
+    const GOLDEN_RATIO = 1.618;
+    const THIRDS_TOP = bounds.height / 3;
+    const THIRDS_BOTTOM = (bounds.height * 2) / 3;
+    
+    // === COLUMN-BASED LAYOUT: TEXT SAFE ZONE ===
+    // Text occupies LEFT 40% of canvas to avoid product (typically center-right)
+    const SAFE_TEXT_ZONE_WIDTH = 0.42; // 42% of canvas width for text
+    const safeTextWidth = bounds.width * SAFE_TEXT_ZONE_WIDTH;
+    
+    console.log('📐 [LAYOUT] Column-based layout: Text zone = left', (SAFE_TEXT_ZONE_WIDTH * 100).toFixed(0) + '%');
+    
+    // === DETERMINE TEXT COLOR BASED ON BACKGROUND ===
     const isDarkBg = zone.brightness < 0.5;
     const textColor = isDarkBg ? '#FFFFFF' : '#1a1a1a';
     
-    // Determine shadow need
-    const needsShadow = zone.variance > 0.02 || (zone.brightness > 0.3 && zone.brightness < 0.7);
-    const shadowColor = isDarkBg ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)';
+    // === ELEGANT SHADOW STYLING ===
+    const needsShadow = zone.variance > 0.015 || (zone.brightness > 0.25 && zone.brightness < 0.75);
+    const shadowColor = isDarkBg ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)';
+    const shadowBlur = 6;
     
-    // --- TESCO LOGO-STYLE POSITIONING ---
-    // Dynamic padding: 3% of image width, minimum 15px
-    const padding = Math.max(15, bounds.width * 0.03);
+    // === AESTHETIC MARGINS ===
+    const horizontalMargin = bounds.width * 0.05; // 5% margin from left edge
+    const verticalMargin = bounds.height * 0.05;
     
-    // Base font size relative to image bounds (not canvas)
-    const baseSize = Math.max(24, Math.min(60, bounds.width / 15));
+    // === FONT SIZING (Visual Hierarchy) ===
+    const baseFontSize = Math.max(28, Math.min(52, bounds.width / 16));
+    const headlineFontSize = Math.round(baseFontSize);
+    const subheadingFontSize = Math.round(baseFontSize / 2);
     
-    // --- CORNER-BASED PLACEMENT (like TescoLogo) ---
-    let xPos, yPos, align, maxW, fontSize;
+    // === WIDTH CALCULATION: Stay within safe zone ===
+    // Text width is the safe zone minus margins
+    const textWidth = safeTextWidth - horizontalMargin * 2;
     
-    // Map grid zone to corner positions
-    const col = zone.col;
-    const row = zone.row;
+    console.log('📐 [LAYOUT] Text width:', textWidth.toFixed(0), 'px (safe zone:', safeTextWidth.toFixed(0), 'px)');
     
-    // === WIDTH CONSTRAINTS ===
-    // Side columns get narrower width to avoid center subject
-    if (col === 0 || col === 2) {
-      maxW = bounds.width * 0.45;
-      fontSize = baseSize * 0.9;
+    // === POSITIONING: Always left-aligned in safe zone ===
+    const headlineX = bounds.x + horizontalMargin;
+    const align = 'left'; // Left-align for column layout
+    
+    // Get zone info for Y positioning
+    const row = zone.row || 0; // Default to top row for column layout
+    const col = zone.col || 0;
+    
+    // Y Position: Rule of Thirds with Golden Ratio spacing
+    let headlineY, subheadingY;
+    
+    if (row === 0) {
+      // TOP ZONE - Position at top (most common for column layout)
+      headlineY = bounds.y + verticalMargin + (THIRDS_TOP * 0.15);
+    } else if (row === 2) {
+      // BOTTOM ZONE - Position above bottom third
+      const textBlockHeight = headlineFontSize * 2.5;
+      headlineY = bounds.y + THIRDS_BOTTOM - textBlockHeight;
     } else {
-      // Center column - wider for hero text
-      maxW = bounds.width * 0.80;
-      fontSize = zone.variance < 0.005 ? baseSize * 1.3 : baseSize;
+      // MIDDLE ZONE - 30% from top
+      headlineY = bounds.y + (bounds.height * 0.3);
     }
     
-    // === X POSITION (TescoLogo-style corner math) ===
-    switch (col) {
-      case 0: // LEFT column
-        xPos = bounds.x + padding;
-        align = 'left';
-        break;
-      case 2: // RIGHT column
-        xPos = bounds.x + bounds.width - maxW - padding;
-        align = 'right';
-        break;
-      default: // CENTER column
-        xPos = bounds.x + (bounds.width - maxW) / 2;
-        align = 'center';
-    }
+    // === GOLDEN RATIO SPACING BETWEEN HEADLINE AND SUBHEADING ===
+    // Gap = headline font size / golden ratio ≈ 0.618 * fontSize
+    const goldenGap = headlineFontSize / GOLDEN_RATIO;
+    subheadingY = headlineY + headlineFontSize * 1.3 + goldenGap;
     
-    // === Y POSITION (TescoLogo-style corner math) ===
-    // Account for text height (~fontSize * 1.5 for line height)
-    const textBlockHeight = fontSize * 2.5; // headline + subheading approx
-    
-    switch (row) {
-      case 0: // TOP row
-        yPos = bounds.y + padding;
-        break;
-      case 2: // BOTTOM row
-        yPos = bounds.y + bounds.height - textBlockHeight - padding;
-        break;
-      default: // MIDDLE row
-        yPos = bounds.y + (bounds.height - textBlockHeight) / 2;
-    }
-    
-    // Subheading positioned dynamically below headline
-    const subheadingY = yPos + fontSize * 1.3;
+    console.log('✨ [AESTHETIC] Golden Ratio Gap:', goldenGap.toFixed(1), 'px');
+    console.log('✨ [AESTHETIC] Headline→Subheading spacing:', (subheadingY - headlineY).toFixed(1), 'px');
 
     return {
       headline: {
-        x: xPos,
-        y: yPos,
-        width: maxW,
-        fontSize: Math.round(fontSize),
+        x: headlineX,
+        y: headlineY,
+        width: textWidth,
+        fontSize: headlineFontSize,
         color: textColor,
         align: align,
         shadowEnabled: needsShadow,
         shadowColor: shadowColor,
-        shadowBlur: 4,
+        shadowBlur: shadowBlur,
+        shadowOffsetX: 0,
+        shadowOffsetY: 2, // Subtle downward shadow
+        letterSpacing: 0.5, // Slight letter spacing for headlines
         isSmart: true,
-        zone: `row${row}-col${col}` // Debug info
+        zone: `row${row}-col${col}`
       },
       subheading: {
-        x: xPos,
+        x: headlineX,
         y: subheadingY,
-        width: maxW,
-        fontSize: Math.round(fontSize * 0.6),
+        width: textWidth,
+        fontSize: subheadingFontSize,
         color: textColor,
         align: align,
         shadowEnabled: needsShadow,
         shadowColor: shadowColor,
-        shadowBlur: 3
+        shadowBlur: shadowBlur - 2,
+        shadowOffsetX: 0,
+        shadowOffsetY: 1,
+        letterSpacing: 0.2,
+        lineHeight: 1.5, // More readable line height for subheadings
+        isSmart: true
       }
     };
   }
 
+  /**
+   * Aesthetic default placement with golden ratio spacing
+   */
   static getDefaultPlacement(w, h) {
+    const GOLDEN_RATIO = 1.618;
+    const headlineFontSize = Math.max(28, Math.min(48, w / 16));
+    const subheadingFontSize = Math.round(headlineFontSize / 2);
+    const goldenGap = headlineFontSize / GOLDEN_RATIO;
+    const textWidth = w * 0.62; // Golden ratio based width
+    
     return {
       headline: {
-        x: w / 2,
-        y: h * 0.15,
-        fontSize: 42,
+        x: (w - textWidth) / 2,
+        y: h * 0.12, // Top placement
+        width: textWidth,
+        fontSize: headlineFontSize,
         color: '#FFFFFF',
+        align: 'center',
         shadowEnabled: true,
         shadowColor: 'rgba(0,0,0,0.5)',
-        shadowBlur: 4
+        shadowBlur: 6,
+        shadowOffsetY: 2,
+        letterSpacing: 0.5
       },
       subheading: {
-        x: w / 2,
-        y: h * 0.22,
-        fontSize: 24,
+        x: (w - textWidth) / 2,
+        y: h * 0.12 + headlineFontSize * 1.3 + goldenGap,
+        width: textWidth,
+        fontSize: subheadingFontSize,
         color: '#FFFFFF',
+        align: 'center',
         shadowEnabled: true,
         shadowColor: 'rgba(0,0,0,0.5)',
-        shadowBlur: 3
+        shadowBlur: 4,
+        shadowOffsetY: 1,
+        letterSpacing: 0.2,
+        lineHeight: 1.5
       }
     };
   }
