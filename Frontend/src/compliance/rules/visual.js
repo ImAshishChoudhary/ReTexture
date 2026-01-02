@@ -2,116 +2,152 @@
  * Visual rules: Contrast, Drinkaware logo, Face Detection
  */
 
-import CONSTANTS from '../constants.json';
-import { getContrastRatio } from '../utils/color';
+import CONSTANTS from "../constants.json";
+import { getContrastRatio } from "../utils/color";
 // Face detection is loaded dynamically to avoid breaking the module if TF.js fails
 
 export function checkContrast(elements, background) {
-  console.log('🔍 [VISUAL RULES] checkContrast called');
-  console.log('  ↳ Elements count:', elements.length);
-  console.log('  ↳ Background:', background);
-  
+  console.log("🔍 [VISUAL RULES] checkContrast called");
+  console.log("  ↳ Elements count:", elements.length);
+  console.log("  ↳ Background:", background);
+
   const violations = [];
-  const checkableElements = elements.filter(el => el.type === 'text' || el.type === 'icon');
-  console.log(`  ↳ Checkable elements (text/icon): ${checkableElements.length}`);
-  
+  const checkableElements = elements.filter(
+    (el) => el.type === "text" || el.type === "icon"
+  );
+  console.log(
+    `  ↳ Checkable elements (text/icon): ${checkableElements.length}`
+  );
+
   checkableElements.forEach((el, index) => {
-    const color = el.fill || '#000000';
+    const color = el.fill || "#000000";
     const fontSize = el.fontSize || 16;
-    
-    console.log(`  🔍 Checking element ${index + 1}/${checkableElements.length}: ${el.id}`);
+
+    console.log(
+      `  🔍 Checking element ${index + 1}/${checkableElements.length}: ${el.id}`
+    );
     console.log(`    ↳ Color: ${color}, Font size: ${fontSize}px`);
-    
+
     const ratio = getContrastRatio(color, background);
-    const minRatio = fontSize >= CONSTANTS.WCAG.LARGE_TEXT_SIZE
-      ? CONSTANTS.WCAG.LARGE_TEXT_RATIO
-      : CONSTANTS.WCAG.MIN_RATIO;
-    
-    console.log(`    ↳ Contrast ratio: ${ratio.toFixed(2)}:1, Required: ${minRatio}:1`);
-    
+    const minRatio =
+      fontSize >= CONSTANTS.WCAG.LARGE_TEXT_SIZE
+        ? CONSTANTS.WCAG.LARGE_TEXT_RATIO
+        : CONSTANTS.WCAG.MIN_RATIO;
+
+    console.log(
+      `    ↳ Contrast ratio: ${ratio.toFixed(2)}:1, Required: ${minRatio}:1`
+    );
+
     if (ratio < minRatio) {
       // Determine better color
-      const whiteRatio = getContrastRatio('#ffffff', background);
-      const blackRatio = getContrastRatio('#000000', background);
-      const fixColor = whiteRatio > blackRatio ? '#ffffff' : '#000000';
-      
+      const whiteRatio = getContrastRatio("#ffffff", background);
+      const blackRatio = getContrastRatio("#000000", background);
+      const fixColor = whiteRatio > blackRatio ? "#ffffff" : "#000000";
+
       console.log(`    ⚠️ CONTRAST FAIL! Auto-fix color: ${fixColor}`);
-      console.log(`      ↳ White ratio: ${whiteRatio.toFixed(2)}, Black ratio: ${blackRatio.toFixed(2)}`);
-      
+      console.log(
+        `      ↳ White ratio: ${whiteRatio.toFixed(
+          2
+        )}, Black ratio: ${blackRatio.toFixed(2)}`
+      );
+
       violations.push({
         elementId: el.id,
-        rule: 'CONTRAST_FAIL',
-        severity: 'hard',
-        message: `Contrast ratio ${ratio.toFixed(2)}:1 is below ${minRatio}:1 requirement`,
+        rule: "CONTRAST_FAIL",
+        severity: "hard",
+        message: `Contrast ratio ${ratio.toFixed(
+          2
+        )}:1 is below ${minRatio}:1 requirement`,
         autoFixable: true,
         autoFix: {
-          property: 'fill',
-          value: fixColor
-        }
+          property: "fill",
+          value: fixColor,
+        },
       });
     }
   });
-  
+
   console.log(`✅ checkContrast complete: ${violations.length} violations`);
   return violations;
 }
 
 export function checkDrinkawareLogo(elements, isAlcohol = false) {
-  console.log('🔍 [VISUAL RULES] checkDrinkawareLogo called');
-  console.log('  ↳ Elements count:', elements.length);
-  console.log('  ↳ Is alcohol campaign?', isAlcohol);
-  
+  console.log("🔍 [VISUAL RULES] checkDrinkawareLogo called");
+  console.log("  ↳ Elements count:", elements.length);
+  console.log("  ↳ Is alcohol campaign?", isAlcohol);
+
   const violations = [];
-  
+
   if (!isAlcohol) {
-    console.log('  ⏭️ Not alcohol campaign, skipping Drinkaware checks');
+    console.log("  ⏭️ Not alcohol campaign, skipping Drinkaware checks");
     return violations;
   }
-  
-  const hasDrinkaware = elements.some(el => 
-    el.type === 'logo' && 
-    (el.src || '').toLowerCase().includes('drinkaware')
-  );
-  
-  console.log('  ↳ Has Drinkaware logo?', hasDrinkaware);
-  
+
+  // Check for Drinkaware logo OR sticker
+  const hasDrinkaware = elements.some((el) => {
+    // Check logo images
+    if (el.type === "logo" || el.type === "image") {
+      return (el.src || "").toLowerCase().includes("drinkaware");
+    }
+    // Check stickers
+    if (el.type === "sticker") {
+      return (
+        el.stickerId === "drinkaware" ||
+        el.metadata?.satisfiesRule === "MISSING_DRINKAWARE"
+      );
+    }
+    return false;
+  });
+
+  console.log("  ↳ Has Drinkaware logo/sticker?", hasDrinkaware);
+
   if (!hasDrinkaware) {
-    console.log('  ⚠️ MISSING DRINKAWARE LOGO!');
+    console.log("  ⚠️ MISSING DRINKAWARE LOGO!");
     violations.push({
       elementId: null,
-      rule: 'MISSING_DRINKAWARE',
-      severity: 'hard',
-      message: 'Drinkaware logo is required for alcohol campaigns',
-      autoFixable: false,
-      autoFix: null
+      rule: "MISSING_DRINKAWARE",
+      severity: "hard",
+      message: "Drinkaware logo is required for alcohol campaigns",
+      autoFixable: true, // Can now auto-add sticker
+      autoFix: {
+        action: "add_sticker",
+        stickerId: "drinkaware",
+      },
     });
   } else {
     // Check minimum size
-    const drinkawareLogo = elements.find(el => 
-      el.type === 'logo' && 
-      (el.src || '').toLowerCase().includes('drinkaware')
-    );
-    
+    const drinkawareLogo = elements.find((el) => {
+      if (el.type === "logo" || el.type === "image") {
+        return (el.src || "").toLowerCase().includes("drinkaware");
+      }
+      if (el.type === "sticker") {
+        return el.stickerId === "drinkaware";
+      }
+      return false;
+    });
+
     const logoHeight = drinkawareLogo?.height || 0;
     console.log(`  ↳ Drinkaware logo height: ${logoHeight}px`);
-    
+
     if (logoHeight < 20) {
       console.log(`  ⚠️ DRINKAWARE TOO SMALL! ${logoHeight}px < 20px`);
       violations.push({
         elementId: drinkawareLogo.id,
-        rule: 'DRINKAWARE_SIZE',
-        severity: 'hard',
-        message: 'Drinkaware logo must be at least 20px tall',
+        rule: "DRINKAWARE_SIZE",
+        severity: "hard",
+        message: "Drinkaware logo must be at least 20px tall",
         autoFixable: true,
         autoFix: {
-          property: 'height',
-          value: 20
-        }
+          property: "height",
+          value: 20,
+        },
       });
     }
   }
-  
-  console.log(`✅ checkDrinkawareLogo complete: ${violations.length} violations`);
+
+  console.log(
+    `✅ checkDrinkawareLogo complete: ${violations.length} violations`
+  );
   return violations;
 }
 
@@ -123,99 +159,108 @@ export function checkDrinkawareLogo(elements, isAlcohol = false) {
  * @returns {Promise<Array>} - Array of warning violations
  */
 export async function checkPeopleDetection(elements, options = {}) {
-  console.log('🔍 [VISUAL RULES] checkPeopleDetection called');
-  
+  console.log("🔍 [VISUAL RULES] checkPeopleDetection called");
+
   const { enableFaceDetection = true } = options;
-  
+
   if (!enableFaceDetection) {
-    console.log('  ↳ Face detection disabled, skipping');
+    console.log("  ↳ Face detection disabled, skipping");
     return [];
   }
-  
+
   const violations = [];
-  
+
   // Only check image elements
-  const imageElements = elements.filter(el => el.type === 'image');
+  const imageElements = elements.filter((el) => el.type === "image");
   console.log(`  ↳ Image elements to check: ${imageElements.length}`);
-  
+
   if (imageElements.length === 0) {
-    console.log('  ↳ No images to check');
+    console.log("  ↳ No images to check");
     return [];
   }
-  
+
   // Try to load face detection module dynamically
   let detectFaces;
   try {
-    console.log('📦 [VISUAL RULES] Loading face detection module...');
-    const faceModule = await import('../utils/faceDetection.js');
+    console.log("📦 [VISUAL RULES] Loading face detection module...");
+    const faceModule = await import("../utils/faceDetection.js");
     detectFaces = faceModule.detectFaces;
-    console.log('✅ [VISUAL RULES] Face detection module loaded');
+    console.log("✅ [VISUAL RULES] Face detection module loaded");
   } catch (loadError) {
-    console.error('❌ [VISUAL RULES] Failed to load face detection:', loadError.message);
-    console.warn('⚠️ [VISUAL RULES] Continuing without face detection');
+    console.error(
+      "❌ [VISUAL RULES] Failed to load face detection:",
+      loadError.message
+    );
+    console.warn("⚠️ [VISUAL RULES] Continuing without face detection");
     return violations; // Return empty, don't crash
   }
-  
+
   // Process each image element
   for (const el of imageElements) {
     console.log(`  🖼️ Checking image: ${el.id}`);
-    
+
     // Skip if no actual image data
     if (!el.src && !el.imageElement) {
       console.log(`    ↳ No image data, skipping`);
       continue;
     }
-    
+
     try {
       // Create image element from src if needed
       let imageToAnalyze = el.imageElement;
-      
+
       if (!imageToAnalyze && el.src) {
-        console.log(`    ↳ Loading image from src: ${el.src.substring(0, 50)}...`);
+        console.log(
+          `    ↳ Loading image from src: ${el.src.substring(0, 50)}...`
+        );
         // Create temporary image element
         imageToAnalyze = new Image();
-        imageToAnalyze.crossOrigin = 'anonymous';
+        imageToAnalyze.crossOrigin = "anonymous";
         const imgPromise = new Promise((resolve, reject) => {
           imageToAnalyze.onload = () => resolve();
           imageToAnalyze.onerror = reject;
           imageToAnalyze.src = el.src;
         });
-        
+
         // Wait for image to load (with timeout)
         await Promise.race([
           imgPromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 5000)
+          ),
         ]);
         console.log(`    ✅ Image loaded successfully`);
       }
-      
+
       if (!imageToAnalyze) {
         console.log(`    ↳ Could not load image`);
         continue;
       }
-      
+
       // Detect faces
       console.log(`    🔍 Running face detection...`);
       const result = await detectFaces(imageToAnalyze);
       const { faceCount, hasFaces, error } = result;
-      
+
       if (error) {
         console.warn(`    ⚠️ Detection error:`, error.message);
         continue;
       }
-      
+
       if (hasFaces) {
         console.log(`    ⚠️ PEOPLE DETECTED! Count: ${faceCount}`);
         violations.push({
           elementId: el.id,
-          rule: 'PEOPLE_DETECTED',
-          severity: 'warning',
-          message: `Detected ${faceCount} face${faceCount > 1 ? 's' : ''}. Ensure usage rights are secured.`,
+          rule: "PEOPLE_DETECTED",
+          severity: "warning",
+          message: `Detected ${faceCount} face${
+            faceCount > 1 ? "s" : ""
+          }. Ensure usage rights are secured.`,
           autoFixable: false,
           metadata: {
             faceCount,
-            imageId: el.id
-          }
+            imageId: el.id,
+          },
         });
       } else {
         console.log(`    ✅ No faces detected`);
@@ -226,7 +271,9 @@ export async function checkPeopleDetection(elements, options = {}) {
       continue;
     }
   }
-  
-  console.log(`✅ checkPeopleDetection complete: ${violations.length} warnings`);
+
+  console.log(
+    `✅ checkPeopleDetection complete: ${violations.length} warnings`
+  );
   return violations;
 }

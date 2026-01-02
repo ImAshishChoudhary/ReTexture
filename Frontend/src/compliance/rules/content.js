@@ -63,19 +63,32 @@ export function checkRequiredElements(elements) {
 
   const violations = [];
 
-  // Check for Tesco tag
+  // Check for Tesco tag (text OR sticker)
   const textElements = elements.filter((el) => el.type === "text");
+  const stickerElements = elements.filter((el) => el.type === "sticker");
   console.log(`  ↳ Text elements: ${textElements.length}`);
+  console.log(`  ↳ Sticker elements: ${stickerElements.length}`);
 
-  const hasValidTag = textElements.some((el) => {
+  // Check text elements
+  const hasValidTextTag = textElements.some((el) => {
     const text = (el.text || "").toLowerCase().trim();
     const hasTag = CONSTANTS.ALLOWED_TAGS.some((tag) => text.includes(tag));
     if (hasTag) {
-      console.log(`  ✅ Found valid Tesco tag in: ${el.id} - "${text}"`);
+      console.log(`  ✅ Found valid Tesco tag in text: ${el.id} - "${text}"`);
     }
     return hasTag;
   });
 
+  // Check sticker elements for tag stickers
+  const hasValidStickerTag = stickerElements.some((el) => {
+    const satisfiesTag = el.metadata?.satisfiesRule === "MISSING_TAG";
+    if (satisfiesTag) {
+      console.log(`  ✅ Found valid Tesco tag sticker: ${el.stickerId}`);
+    }
+    return satisfiesTag;
+  });
+
+  const hasValidTag = hasValidTextTag || hasValidStickerTag;
   console.log(`  ↳ Has valid Tesco tag? ${hasValidTag}`);
 
   if (!hasValidTag) {

@@ -6,6 +6,8 @@
 import { validateCanvas } from "./checker";
 import { getBoundingBox } from "./utils/geometry";
 import { getContrastRatio } from "./utils/color";
+import { getStickerById, calculateStickerSize } from "../config/stickerConfig";
+import { findOptimalStickerPosition } from "../services/stickerPositionService";
 
 export function applyAutoFixes(editorPages, canvasSize, violations) {
   console.log("🔧 [AUTO-FIX] Starting auto-correction...");
@@ -63,8 +65,14 @@ export function applyAutoFixes(editorPages, canvasSize, violations) {
         break;
 
       case "MISSING_TAG":
-        console.log(`  ↳ Adding Tesco tag`);
-        correctedPages = addTescoTag(correctedPages, canvasSize);
+        console.log(`  ↳ Adding Tesco tag sticker`);
+        correctedPages = addTescoTagSticker(correctedPages, canvasSize);
+        fixesApplied++;
+        break;
+
+      case "MISSING_DRINKAWARE":
+        console.log(`  ↳ Adding Drinkaware sticker`);
+        correctedPages = addDrinkawareSticker(correctedPages, canvasSize);
         fixesApplied++;
         break;
 
@@ -228,6 +236,112 @@ function addHeadline(pages, canvasSize) {
     updatedPages[0] = {
       ...updatedPages[0],
       children: [...(updatedPages[0].children || []), newHeadline],
+    };
+  }
+
+  return updatedPages;
+}
+
+/**
+ * Add Tesco tag sticker (smarter than plain text)
+ */
+function addTescoTagSticker(pages, canvasSize) {
+  const stickerId = "available-at-tesco";
+  const stickerConfig = getStickerById(stickerId);
+
+  if (!stickerConfig) {
+    console.error("Tesco tag sticker not found, falling back to text");
+    return addTescoTag(pages, canvasSize);
+  }
+
+  const size = calculateStickerSize(stickerConfig, canvasSize);
+  const imageBounds = { x: 0, y: 0, width: canvasSize.w, height: canvasSize.h };
+  const existingElements = pages[0]?.children || [];
+
+  const position = findOptimalStickerPosition(
+    stickerConfig,
+    size,
+    imageBounds,
+    existingElements,
+    canvasSize
+  );
+
+  const newSticker = {
+    id: `sticker-${stickerId}-${Date.now()}`,
+    type: "sticker",
+    stickerId: stickerId,
+    src: stickerConfig.src,
+    x: position.x,
+    y: position.y,
+    width: size.width,
+    height: size.height,
+    opacity: 1,
+    draggable: true,
+    metadata: {
+      category: stickerConfig.category,
+      satisfiesRule: "MISSING_TAG",
+      name: stickerConfig.name,
+    },
+  };
+
+  const updatedPages = [...pages];
+  if (updatedPages[0]) {
+    updatedPages[0] = {
+      ...updatedPages[0],
+      children: [...(updatedPages[0].children || []), newSticker],
+    };
+  }
+
+  return updatedPages;
+}
+
+/**
+ * Add Drinkaware sticker for alcohol campaigns
+ */
+function addDrinkawareSticker(pages, canvasSize) {
+  const stickerId = "drinkaware";
+  const stickerConfig = getStickerById(stickerId);
+
+  if (!stickerConfig) {
+    console.error("Drinkaware sticker not found");
+    return pages;
+  }
+
+  const size = calculateStickerSize(stickerConfig, canvasSize);
+  const imageBounds = { x: 0, y: 0, width: canvasSize.w, height: canvasSize.h };
+  const existingElements = pages[0]?.children || [];
+
+  const position = findOptimalStickerPosition(
+    stickerConfig,
+    size,
+    imageBounds,
+    existingElements,
+    canvasSize
+  );
+
+  const newSticker = {
+    id: `sticker-${stickerId}-${Date.now()}`,
+    type: "sticker",
+    stickerId: stickerId,
+    src: stickerConfig.src,
+    x: position.x,
+    y: position.y,
+    width: size.width,
+    height: size.height,
+    opacity: 1,
+    draggable: true,
+    metadata: {
+      category: stickerConfig.category,
+      satisfiesRule: "MISSING_DRINKAWARE",
+      name: stickerConfig.name,
+    },
+  };
+
+  const updatedPages = [...pages];
+  if (updatedPages[0]) {
+    updatedPages[0] = {
+      ...updatedPages[0],
+      children: [...(updatedPages[0].children || []), newSticker],
     };
   }
 

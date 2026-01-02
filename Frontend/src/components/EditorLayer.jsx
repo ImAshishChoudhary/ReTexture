@@ -122,7 +122,7 @@ const EditorLayer = ({ el, setElement, stageRef }) => {
       />
     );
   }
-  if (el?.type === "image") {
+  if (el?.type === "image" || el?.type === "sticker") {
     return (
       <SelectableImage
         key={el?.id}

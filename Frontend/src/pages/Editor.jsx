@@ -34,6 +34,7 @@ import EditorColorPicker from "../components/EditorColorPicker";
 import { serializeToHTML, logToConsole } from "../utils/serializeToHTML";
 import { validateCanvas } from "../compliance/checker";
 import { applyAutoFixes } from "../compliance/corrector";
+import StickerLibrary from "../components/StickerLibrary";
 
 export default function Editor() {
   const navigate = useNavigate();
@@ -747,6 +748,7 @@ export default function Editor() {
               openMiniFor={openMiniFor}
               stageRef={stageRef}
             />
+            <StickerLibrary setPagesWithHistory={setPagesWithHistory} />
           </div>
         )}
       >
