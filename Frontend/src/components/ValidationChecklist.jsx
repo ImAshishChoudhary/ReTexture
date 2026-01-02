@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Typography, Tag, Collapse, Space, Button, Alert } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, WarningOutlined, InfoCircleOutlined } from '@ant-design/icons';
 
@@ -10,11 +10,45 @@ const { Panel } = Collapse;
  * Displays compliance check results in a user-friendly format
  */
 export default function ValidationChecklist({ validationData, onRequestChanges, loading = false }) {
+  console.log('🎨 [VALIDATION CHECKLIST] Component rendering/updating');
+  console.log('📋 Props received:', {
+    hasValidationData: !!validationData,
+    hasCallback: !!onRequestChanges,
+    loading,
+    validationData
+  });
+
+  useEffect(() => {
+    console.log('🔄 [VALIDATION CHECKLIST] Component mounted/updated');
+    console.log('📊 Current validation state:', validationData);
+    
+    return () => {
+      console.log('🗑️ [VALIDATION CHECKLIST] Component will unmount');
+    };
+  }, [validationData]);
+
   if (!validationData) {
+    console.log('⚠️ [VALIDATION CHECKLIST] No validation data, returning null');
     return null;
   }
 
   const { compliant, warnings = [], rules_enforced = [], issues = [], suggestions = [] } = validationData;
+  
+  console.log('📈 [VALIDATION CHECKLIST] Parsed data:', {
+    compliant,
+    warningsCount: warnings.length,
+    rulesEnforcedCount: rules_enforced.length,
+    issuesCount: issues.length,
+    suggestionsCount: suggestions.length
+  });
+
+  const handleAutoFixClick = () => {
+    console.log('🔧 [VALIDATION CHECKLIST] Auto-fix button clicked');
+    console.log('📋 Issues to fix:', issues);
+    if (onRequestChanges) {
+      onRequestChanges();
+    }
+  };
 
   return (
     <Card
@@ -41,11 +75,11 @@ export default function ValidationChecklist({ validationData, onRequestChanges, 
             <Button 
               type="primary" 
               size="small"
-              onClick={onRequestChanges}
+              onClick={handleAutoFixClick}
               loading={loading}
-              style={{ background: '#FF6B35', borderColor: '#FF6B35' }}
+              style={{ background: '#52c41a', borderColor: '#52c41a' }}
             >
-              Request Changes
+              Auto-Fix Compliance
             </Button>
           )}
         </div>
@@ -56,19 +90,22 @@ export default function ValidationChecklist({ validationData, onRequestChanges, 
             message="Blocking Issues (Must Fix)"
             description={
               <Space direction="vertical" style={{ width: '100%' }}>
-                {issues.map((issue, idx) => (
-                  <div key={idx} style={{ marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                      <CloseCircleOutlined style={{ color: '#ff4d4f', marginTop: 4 }} />
-                      <Text strong style={{ color: '#ff4d4f' }}>{issue}</Text>
-                    </div>
-                    {suggestions[idx] && (
-                      <div style={{ marginLeft: 22, marginTop: 4 }}>
-                        <Text type="secondary">💡 Fix: {suggestions[idx]}</Text>
+                {issues.map((issue, idx) => {
+                  console.log(`  ↳ Issue ${idx + 1}:`, issue);
+                  return (
+                    <div key={idx} style={{ marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                        <CloseCircleOutlined style={{ color: '#ff4d4f', marginTop: 4 }} />
+                        <Text strong style={{ color: '#ff4d4f' }}>{issue}</Text>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {suggestions[idx] && (
+                        <div style={{ marginLeft: 22, marginTop: 4 }}>
+                          <Text type="secondary">💡 Fix: {suggestions[idx]}</Text>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </Space>
             }
             type="error"
@@ -83,12 +120,15 @@ export default function ValidationChecklist({ validationData, onRequestChanges, 
             message="Warnings"
             description={
               <Space direction="vertical" style={{ width: '100%' }}>
-                {warnings.map((warning, idx) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                    <WarningOutlined style={{ color: '#faad14', marginTop: 4 }} />
-                    <Text>{warning}</Text>
-                  </div>
-                ))}
+                {warnings.map((warning, idx) => {
+                  console.log(`  ↳ Warning ${idx + 1}:`, warning);
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                      <WarningOutlined style={{ color: '#faad14', marginTop: 4 }} />
+                      <Text>{warning}</Text>
+                    </div>
+                  );
+                })}
               </Space>
             }
             type="warning"

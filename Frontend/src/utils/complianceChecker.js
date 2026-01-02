@@ -97,7 +97,7 @@ function hexToRgb(hex) {
 /**
  * Calculate contrast ratio between two colors (WCAG formula)
  */
-function getContrastRatio(color1, color2) {
+export function getContrastRatio(color1, color2) {
   const l1 = getLuminance(color1);
   const l2 = getLuminance(color2);
   const lighter = Math.max(l1, l2);
@@ -327,4 +327,194 @@ export function formatValidationForUI(validationResult) {
     issues: validationResult.hardFails.map(f => f.detail),
     suggestions: validationResult.hardFails.map(f => f.fix),
   };
+}
+/**
+ * Auto-corrects canvas elements to meet compliance standards
+ * 
+ * @param {Array} editorPages - Current pages array
+ * @param {Object} canvasSize - { w, h }
+ * @param {Object} options - { formatType } 
+ * @returns {Array} - New editorPages array with corrections
+ */
+export function applyAutoFixes(editorPages, canvasSize, options = {}) {
+  const { w, h } = canvasSize;
+  const aspectRatio = w / h;
+  const is916 = Math.abs(aspectRatio - (9/16)) < 0.05;
+  const formatType = options.formatType || 'social';
+  const minSize = MIN_FONT_SIZES[formatType] || MIN_FONT_SIZES.default;
+  const background = editorPages[0]?.background || '#ffffff';
+
+  return editorPages.map(page => {
+    let newChildren = (page.children || []).map(el => {
+      let newEl = { ...el };
+
+      // 1. Fix Font Size
+      if (newEl.type === 'text') {
+        const currentSize = newEl.fontSize || 16;
+        if (currentSize < minSize) {
+          newEl.fontSize = minSize;
+        }
+      }
+
+      // 2. Fix Safe Zones (9:16)
+      if (is916) {
+        const { topClear, bottomClear } = SAFE_ZONES['9:16'];
+        const elTop = newEl.y || 0;
+        const elHeight = newEl.height || (newEl.type === 'text' ? (newEl.fontSize * 1.2) : 50);
+        const elBottom = elTop + elHeight;
+
+        if (elTop < topClear) {
+          newEl.y = topClear + 5;
+        } else if (elBottom > h - bottomClear) {
+          newEl.y = h - bottomClear - elHeight - 5;
+        }
+      }
+
+      // 3. Fix Contrast
+      if (newEl.type === 'text' || newEl.type === 'icon') {
+        const color = newEl.fill || '#000000';
+        const ratio = getContrastRatio(color, background);
+        if (ratio < WCAG_AA_RATIO) {
+          const whiteRatio = getContrastRatio('#ffffff', background);
+          const blackRatio = getContrastRatio('#000000', background);
+          newEl.fill = whiteRatio > blackRatio ? '#ffffff' : '#000000';
+        }
+      }
+
+      return newEl;
+    });
+
+    // 4. Add missing Tesco Tag if missing
+    const hasValidTag = newChildren.some(el => {
+      const text = (el.text || '').toLowerCase().trim();
+      return ALLOWED_TAGS.some(tag => text.includes(tag));
+    });
+
+    if (!hasValidTag && is916) {
+      const tagColor = getContrastRatio('#ffffff', background) > getContrastRatio('#000000', background) ? '#ffffff' : '#000000';
+      newChildren.push({
+        id: `auto-tag-${Date.now()}`,
+        type: 'text',
+        text: 'Available at Tesco',
+        fontSize: minSize,
+        fontWeight: 'bold',
+        x: 50,
+        y: h - 180, // Safe spot within guideline but not obscured
+        fill: tagColor,
+        fontFamily: 'Inter, Arial, sans-serif',
+        align: 'center'
+      });
+    }
+
+    return { ...page, children: newChildren };
+  });
+}
+
+// ============== HEADLINE COMPLIANCE ==============
+
+/**
+ * Headline-specific compliance rules
+ */
+const HEADLINE_RULES = {
+  maxLength: 50,          // Maximum characters for headline
+  maxWords: 8,            // Maximum words
+  minWords: 2,            // Minimum words
+  minFontSize: 24,        // Minimum font for headlines
+  subheadingMaxLength: 100,
+  subheadingMaxWords: 15,
+};
+
+/**
+ * Validate a headline/subheading text before adding to canvas
+ * 
+ * @param {string} text - The headline or subheading text
+ * @param {boolean} isSubheading - Whether this is a subheading
+ * @returns {Object} - { compliant: boolean, issues: [], warnings: [] }
+ */
+export function validateHeadlineText(text, isSubheading = false) {
+  const result = {
+    compliant: true,
+    issues: [],
+    warnings: [],
+  };
+
+  if (!text || text.trim().length === 0) {
+    result.issues.push('Text cannot be empty');
+    result.compliant = false;
+    return result;
+  }
+
+  const rules = isSubheading ? {
+    maxLength: HEADLINE_RULES.subheadingMaxLength,
+    maxWords: HEADLINE_RULES.subheadingMaxWords,
+    minWords: 3,
+  } : {
+    maxLength: HEADLINE_RULES.maxLength,
+    maxWords: HEADLINE_RULES.maxWords,
+    minWords: HEADLINE_RULES.minWords,
+  };
+
+  // 1. Check blocked keywords
+  for (const { pattern, rule } of BLOCKED_PATTERNS) {
+    if (pattern.test(text)) {
+      const match = text.match(pattern);
+      result.issues.push(`${rule}: Found "${match[0]}"`);
+      result.compliant = false;
+    }
+  }
+
+  // 2. Check length
+  if (text.length > rules.maxLength) {
+    result.warnings.push(`Text too long (${text.length}/${rules.maxLength} chars). Consider shortening.`);
+  }
+
+  // 3. Check word count
+  const wordCount = text.trim().split(/\s+/).length;
+  if (wordCount > rules.maxWords) {
+    result.warnings.push(`Too many words (${wordCount}/${rules.maxWords}). Shorter headlines are more impactful.`);
+  }
+  if (wordCount < rules.minWords) {
+    result.warnings.push(`Too few words (${wordCount}/${rules.minWords}). Consider adding more context.`);
+  }
+
+  // 4. Check for ALL CAPS abuse
+  const capsRatio = (text.match(/[A-Z]/g) || []).length / text.length;
+  if (capsRatio > 0.7 && text.length > 10) {
+    result.warnings.push('Excessive use of capital letters. Consider title case instead.');
+  }
+
+  // 5. Check for multiple exclamation marks
+  if (/!{2,}/.test(text)) {
+    result.issues.push('Multiple exclamation marks are not brand compliant');
+    result.compliant = false;
+  }
+
+  // 6. Check for price mentions
+  if (/£\d+|\$\d+|€\d+|\d+\.\d{2}/.test(text)) {
+    result.issues.push('Price mentions require separate approval. Contact brand team.');
+    result.compliant = false;
+  }
+
+  return result;
+}
+
+/**
+ * Format compliance result for display
+ */
+export function formatHeadlineCompliance(result) {
+  if (result.compliant && result.warnings.length === 0) {
+    return { status: 'pass', message: '✅ Headline is brand compliant' };
+  } else if (result.compliant && result.warnings.length > 0) {
+    return { 
+      status: 'warning', 
+      message: `⚠️ ${result.warnings.length} suggestion(s)`,
+      details: result.warnings 
+    };
+  } else {
+    return { 
+      status: 'fail', 
+      message: `❌ ${result.issues.length} compliance issue(s)`,
+      details: result.issues 
+    };
+  }
 }

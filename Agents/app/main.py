@@ -3,18 +3,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
-from rembg import remove
+# from rembg import remove  # Moved inside endpoint to prevent startup hang
 from PIL import Image
 import io
 import base64
 import json
 import logging
 import os
+from app.core.models import ValidationRequest, ValidationResponse
+from app.core.prompts import COMPLIANCE_SYSTEM_PROMPT
+from app.routers import headline_routes  # NEW: Headline generator routes
+from google import genai
+from google.genai import types
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Agent API")
+
+# Register headline routes
+app.include_router(headline_routes.router)
+
 
 # CORS
 app.add_middleware(
@@ -51,12 +60,13 @@ async def remove_background(file: UploadFile = File(...)):
         
         if not file.content_type.startswith("image/"):
             print(f"[AGENT DEBUG] ERROR: Invalid content type - {file.content_type}")
+            logger.error(f"[AGENT] Invalid content type: {file.content_type}")
             raise HTTPException(status_code=400, detail="File must be an image")
         
-        print("[AGENT DEBUG] Reading file data...")
+        print(f"[AGENT DEBUG] Reading {file.filename} data...")
         input_data = await file.read()
         print(f"[AGENT DEBUG] File size: {len(input_data)} bytes")
-        logger.info(f"Processing image: {file.filename}, size: {len(input_data)} bytes")
+        logger.info(f"[AGENT] Processing image: {file.filename}, size: {len(input_data)} bytes")
         
         # Resize large images to prevent ONNX memory allocation errors
         MAX_SIZE = 1024  # Reduced to 1024px to prevent memory issues
@@ -89,6 +99,8 @@ async def remove_background(file: UploadFile = File(...)):
         
         # Remove background using rembg
         print("[AGENT DEBUG] Starting rembg background removal...")
+        print("[AGENT DEBUG] Loading rembg (this may take a moment)...")
+        from rembg import remove
         print("[AGENT DEBUG] This may take 10-30 seconds for first run (model loading)...")
         output_data = remove(input_data)
         print(f"[AGENT DEBUG] Background removal complete! Output size: {len(output_data)} bytes")
@@ -101,6 +113,8 @@ async def remove_background(file: UploadFile = File(...)):
         logger.info(f"Background removed, output size: {len(base64_image)} chars")
         
         print("[AGENT DEBUG] Sending success response...")
+        print(f"[AGENT DEBUG] - success: True")
+        print(f"[AGENT DEBUG] - image_data length: {len(base64_image)} chars")
         print("=" * 60)
         print("[AGENT DEBUG] /remove-bg completed successfully!")
         print("=" * 60)
@@ -264,15 +278,18 @@ async def generate_variations_stream(req: VariationsRequest):
             complete_event = f"data: {json.dumps({'type': 'complete'})}\n\n"
             print(f"[AGENT] 📤 Sending COMPLETE event")
             yield complete_event
-            print("[AGENT] 🎉 SSE stream finished successfully!")
+            print(f"[AGENT] ✅ SSE stream finished successfully!")
+            print("=" * 60)
             
         except Exception as e:
-            print(f"[AGENT] ❌ Fatal error in event_generator: {e}")
+            print(f"[AGENT] ❌ Fatal error in event_generator: {str(e)}")
+            logger.error(f"[AGENT] Fatal error in SSE stream: {e}")
             import traceback
-            print(f"[AGENT] Traceback:\n{traceback.format_exc()}")
+            trace = traceback.format_exc()
+            print(f"[AGENT] Traceback:\n{trace}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
     
-    print("[AGENT] Returning StreamingResponse...")
+    print(f"[AGENT] Returning StreamingResponse for concept '{req.concept}'")
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
@@ -282,6 +299,64 @@ async def generate_variations_stream(req: VariationsRequest):
             "X-Accel-Buffering": "no"
         }
     )
+
+
+@app.post("/validate")
+async def validate_canvas(req: ValidationRequest) -> ValidationResponse:
+    """
+    Validate and auto-correct canvas HTML/CSS for Tesco compliance.
+    """
+    print("=" * 60)
+    print("[AGENT] /validate endpoint called")
+    print("=" * 60)
+    
+    try:
+        # 1. Decode base64 canvas String
+        decoded_bytes = base64.b64decode(req.canvas)
+        canvas_content = decoded_bytes.decode('utf-8')
+        print(f"[AGENT] Decoded canvas content: {len(canvas_content)} chars")
+
+        # 2. Call Gemini for validation & correction
+        client = genai.Client(
+            vertexai=True,
+            project=os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2"),
+            location=os.getenv("GCP_LOCATION", "us-central1")
+        )
+        
+        prompt = f"{COMPLIANCE_SYSTEM_PROMPT}\n\nCanvas HTML/CSS:\n{canvas_content}"
+        
+        print("[AGENT] Calling Gemini for compliance check...")
+        response = client.models.generate_content(
+            model=os.getenv("GEMINI_MODEL_ID", "gemini-2.0-flash-exp"),
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
+        )
+        
+        print("[AGENT] Gemini response received")
+        result = json.loads(response.text)
+        
+        # 3. Format response
+        return ValidationResponse(
+            canvas=result.get("corrected_canvas", req.canvas),
+            compliant=result.get("compliant", False),
+            issues=result.get("issues", []),
+            suggestions=result.get("suggestions", [])
+        )
+        
+    except Exception as e:
+        print(f"[AGENT] ❌ Error in /validate: {e}")
+        import traceback
+        print(traceback.format_exc())
+        
+        # Return a non-compliant fallback if AI fails
+        return ValidationResponse(
+            canvas=req.canvas,
+            compliant=False,
+            issues=[{"type": "system_error", "message": f"Validation engine error: {str(e)}", "fix": "Try again later"}],
+            suggestions=["Ensure the canvas content is valid HTML/CSS"]
+        )
 
 
 if __name__ == "__main__":
