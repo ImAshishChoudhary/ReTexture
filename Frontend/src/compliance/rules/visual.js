@@ -6,13 +6,73 @@ import CONSTANTS from "../constants.json";
 import { getContrastRatio } from "../utils/color";
 // Face detection is loaded dynamically to avoid breaking the module if TF.js fails
 
-export function checkContrast(elements, background) {
+/**
+ * FIRST PRINCIPLE: Calculate actual background color at element's position
+ * Don't assume canvas background - find what's actually behind the text!
+ */
+function getActualBackgroundAtPosition(element, allElements, canvasBackground) {
+  const { x = 0, y = 0, width = 100, height = 100 } = element;
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+
+  console.log(
+    `    🔍 Finding background at (${centerX.toFixed(0)}, ${centerY.toFixed(
+      0
+    )})`
+  );
+
+  // Find elements behind this one (lower z-index or earlier in array)
+  const elementIndex = allElements.findIndex((el) => el.id === element.id);
+  const elementsBelow = allElements.slice(0, elementIndex).reverse();
+
+  // Check what's behind: images, shapes, etc.
+  for (const behindEl of elementsBelow) {
+    const behindX = behindEl.x || 0;
+    const behindY = behindEl.y || 0;
+    const behindW = behindEl.width || 100;
+    const behindH = behindEl.height || 100;
+
+    // Check if element is behind our text (overlaps)
+    if (
+      centerX >= behindX &&
+      centerX <= behindX + behindW &&
+      centerY >= behindY &&
+      centerY <= behindY + behindH
+    ) {
+      console.log(
+        `      ↳ Found element behind: ${behindEl.type} (${behindEl.id})`
+      );
+
+      // For images, we can't know the exact color without pixel analysis
+      // So we'll use a conservative approach: assume dark for images
+      if (behindEl.type === "image") {
+        console.log(
+          `      ↳ Image detected - assuming DARK background (#1a1a1a)`
+        );
+        return "#1a1a1a"; // Dark color for safety with images
+      }
+
+      // For shapes/rectangles, use their fill color
+      if (behindEl.fill) {
+        console.log(`      ↳ Using element fill: ${behindEl.fill}`);
+        return behindEl.fill;
+      }
+    }
+  }
+
+  console.log(
+    `      ↳ No element behind, using canvas background: ${canvasBackground}`
+  );
+  return canvasBackground;
+}
+
+export function checkContrast(allElements, canvasBackground) {
   console.log("🔍 [VISUAL RULES] checkContrast called");
-  console.log("  ↳ Elements count:", elements.length);
-  console.log("  ↳ Background:", background);
+  console.log("  ↳ Elements count:", allElements.length);
+  console.log("  ↳ Canvas background:", canvasBackground);
 
   const violations = [];
-  const checkableElements = elements.filter(
+  const checkableElements = allElements.filter(
     (el) => el.type === "text" || el.type === "icon"
   );
   console.log(
@@ -22,34 +82,69 @@ export function checkContrast(elements, background) {
   checkableElements.forEach((el, index) => {
     const color = el.fill || "#000000";
     const fontSize = el.fontSize || 16;
+    const elementType = el.id?.includes("headline")
+      ? "HEADLINE"
+      : el.id?.includes("subheading")
+      ? "SUBHEADING"
+      : "TEXT";
 
     console.log(
-      `  🔍 Checking element ${index + 1}/${checkableElements.length}: ${el.id}`
+      `  🔍 Checking ${elementType} ${index + 1}/${checkableElements.length}: ${
+        el.id
+      }`
     );
+    console.log(`    ↳ Text: "${el.text?.substring(0, 50) || "N/A"}"`);
     console.log(`    ↳ Color: ${color}, Font size: ${fontSize}px`);
+    console.log(
+      `    ↳ Position: (${(el.x || 0).toFixed(0)}, ${(el.y || 0).toFixed(0)})`
+    );
 
-    const ratio = getContrastRatio(color, background);
+    // FIRST PRINCIPLE: Get ACTUAL background at this element's position
+    const actualBackground = getActualBackgroundAtPosition(
+      el,
+      allElements,
+      canvasBackground
+    );
+    console.log(`    ↳ Actual background: ${actualBackground}`);
+
+    const ratio = getContrastRatio(color, actualBackground);
     const minRatio =
       fontSize >= CONSTANTS.WCAG.LARGE_TEXT_SIZE
         ? CONSTANTS.WCAG.LARGE_TEXT_RATIO
         : CONSTANTS.WCAG.MIN_RATIO;
 
     console.log(
-      `    ↳ Contrast ratio: ${ratio.toFixed(2)}:1, Required: ${minRatio}:1`
+      `    ↳ Contrast ratio: ${ratio.toFixed(2)}:1, Required: ${minRatio}:1 ${
+        ratio >= minRatio ? "✅ PASS" : "❌ FAIL"
+      }`
     );
 
     if (ratio < minRatio) {
-      // Determine better color
-      const whiteRatio = getContrastRatio("#ffffff", background);
-      const blackRatio = getContrastRatio("#000000", background);
-      const fixColor = whiteRatio > blackRatio ? "#ffffff" : "#000000";
+      // FIRST PRINCIPLE: Calculate fix based on ACTUAL background, not canvas background
+      const whiteRatio = getContrastRatio("#ffffff", actualBackground);
+      const blackRatio = getContrastRatio("#000000", actualBackground);
 
-      console.log(`    ⚠️ CONTRAST FAIL! Auto-fix color: ${fixColor}`);
+      // Choose color with BETTER contrast
+      const fixColor = whiteRatio > blackRatio ? "#ffffff" : "#000000";
+      const fixRatio = Math.max(whiteRatio, blackRatio);
+
+      console.log(`    ⚠️ CONTRAST FAIL for ${elementType}!`);
       console.log(
-        `      ↳ White ratio: ${whiteRatio.toFixed(
+        `      ↳ Current: ${color} on ${actualBackground} = ${ratio.toFixed(
           2
-        )}, Black ratio: ${blackRatio.toFixed(2)}`
+        )}:1`
       );
+      console.log(
+        `      ↳ White option: ${whiteRatio.toFixed(2)}:1 ${
+          whiteRatio >= minRatio ? "✅" : "❌"
+        }`
+      );
+      console.log(
+        `      ↳ Black option: ${blackRatio.toFixed(2)}:1 ${
+          blackRatio >= minRatio ? "✅" : "❌"
+        }`
+      );
+      console.log(`      ↳ Auto-fix: ${fixColor} (${fixRatio.toFixed(2)}:1)`);
 
       violations.push({
         elementId: el.id,
@@ -62,6 +157,7 @@ export function checkContrast(elements, background) {
         autoFix: {
           property: "fill",
           value: fixColor,
+          calculatedAgainst: actualBackground, // Store for debugging
         },
       });
     }
