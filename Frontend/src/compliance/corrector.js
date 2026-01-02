@@ -3,156 +3,233 @@
  * Applies transformations to resolve violations
  */
 
-import { validateCanvas } from './checker';
-import { getBoundingBox } from './utils/geometry';
-import { getContrastRatio } from './utils/color';
+import { validateCanvas } from "./checker";
+import { getBoundingBox } from "./utils/geometry";
+import { getContrastRatio } from "./utils/color";
 
 export function applyAutoFixes(editorPages, canvasSize, violations) {
-  console.log('🔧 [AUTO-FIX] Starting auto-correction...');
+  console.log("🔧 [AUTO-FIX] Starting auto-correction...");
   console.log(`📋 Total violations: ${violations.length}`);
-  
-  const fixableViolations = violations.filter(v => v.autoFixable);
+
+  const fixableViolations = violations.filter((v) => v.autoFixable);
   console.log(`✅ Fixable violations: ${fixableViolations.length}`);
-  
+
   if (fixableViolations.length === 0) {
-    console.log('⚠️ No auto-fixable violations found');
+    console.log("⚠️ No auto-fixable violations found");
   }
-  
+
   let correctedPages = JSON.parse(JSON.stringify(editorPages));
   let fixesApplied = 0;
   const unfixedViolations = [];
-  
+
   violations.forEach((violation, index) => {
     if (!violation.autoFixable || !violation.autoFix) {
-      console.log(`⏭️ [${index + 1}/${violations.length}] Skipping non-fixable: ${violation.rule} (${violation.elementId})`);
+      console.log(
+        `⏭️ [${index + 1}/${violations.length}] Skipping non-fixable: ${
+          violation.rule
+        } (${violation.elementId})`
+      );
       unfixedViolations.push(violation);
       return;
     }
-    
-    console.log(`🔨 [${index + 1}/${violations.length}] Fixing ${violation.rule}...`);
-    
+
+    console.log(
+      `🔨 [${index + 1}/${violations.length}] Fixing ${violation.rule}...`
+    );
+
     switch (violation.rule) {
-      case 'MIN_FONT_SIZE':
-        console.log(`  ↳ Adjusting font size for ${violation.elementId} to ${violation.autoFix.value}`);
+      case "MIN_FONT_SIZE":
+        console.log(
+          `  ↳ Adjusting font size for ${violation.elementId} to ${violation.autoFix.value}`
+        );
         correctedPages = fixFontSize(correctedPages, violation);
         fixesApplied++;
         break;
-        
-      case 'SAFE_ZONE':
-        console.log(`  ↳ Moving ${violation.elementId} to y=${violation.autoFix.value}`);
+
+      case "SAFE_ZONE":
+        console.log(
+          `  ↳ Moving ${violation.elementId} to y=${violation.autoFix.value}`
+        );
         correctedPages = moveElement(correctedPages, violation, canvasSize);
         fixesApplied++;
         break;
-        
-      case 'CONTRAST_FAIL':
-        console.log(`  ↳ Fixing contrast for ${violation.elementId} to ${violation.autoFix.value}`);
+
+      case "CONTRAST_FAIL":
+        console.log(
+          `  ↳ Fixing contrast for ${violation.elementId} to ${violation.autoFix.value}`
+        );
         correctedPages = fixContrast(correctedPages, violation);
         fixesApplied++;
         break;
-        
-      case 'MISSING_TAG':
+
+      case "MISSING_TAG":
         console.log(`  ↳ Adding Tesco tag`);
         correctedPages = addTescoTag(correctedPages, canvasSize);
         fixesApplied++;
         break;
-        
-      case 'DRINKAWARE_SIZE':
+
+      case "DRINKAWARE_SIZE":
         console.log(`  ↳ Resizing Drinkaware logo`);
         correctedPages = fixProperty(correctedPages, violation);
         fixesApplied++;
         break;
-        
+
+      case "OVERLAP":
+        console.log(`  ↳ Fixing overlap for ${violation.elementId}`);
+        correctedPages = fixOverlap(correctedPages, violation, canvasSize);
+        fixesApplied++;
+        break;
+
+      case "MISSING_HEADLINE":
+        console.log(`  ↳ Adding headline text`);
+        correctedPages = addHeadline(correctedPages, canvasSize);
+        fixesApplied++;
+        break;
+
+      case "BLOCKED_KEYWORD":
+        console.log(
+          `  ⚠️ Blocked keyword in ${violation.elementId} - requires manual fix`
+        );
+        console.log(`      Suggestion: Remove or rephrase the flagged text`);
+        unfixedViolations.push(violation);
+        break;
+
       default:
         console.log(`  ⚠️ Unknown rule type: ${violation.rule}`);
         unfixedViolations.push(violation);
     }
   });
-  
+
   console.log(`✅ Applied ${fixesApplied} fixes`);
-  
+
   // Re-run checker to validate fixes
-  console.log('🔄 Re-validating after fixes...');
+  console.log("🔄 Re-validating after fixes...");
   const recheckResult = validateCanvas(correctedPages, canvasSize);
-  console.log(`📊 Re-validation result: ${recheckResult.compliant ? 'COMPLIANT ✅' : 'STILL NON-COMPLIANT ⚠️'}`);
+  console.log(
+    `📊 Re-validation result: ${
+      recheckResult.compliant ? "COMPLIANT ✅" : "STILL NON-COMPLIANT ⚠️"
+    }`
+  );
   console.log(`📈 New score: ${recheckResult.score}/100`);
-  
+
   return {
     correctedPages,
     fixesApplied,
     remainingIssues: recheckResult.violations,
-    remainingWarnings: recheckResult.warnings
+    remainingWarnings: recheckResult.warnings,
   };
 }
 
 // Fix helpers
 
 function fixFontSize(pages, violation) {
-  return updateElement(pages, violation.elementId, el => ({
+  return updateElement(pages, violation.elementId, (el) => ({
     ...el,
-    fontSize: violation.autoFix.value
+    fontSize: violation.autoFix.value,
   }));
 }
 
 function moveElement(pages, violation, canvasSize) {
-  return updateElement(pages, violation.elementId, el => ({
+  return updateElement(pages, violation.elementId, (el) => ({
     ...el,
-    y: violation.autoFix.value
+    y: violation.autoFix.value,
   }));
 }
 
 function fixContrast(pages, violation) {
-  return updateElement(pages, violation.elementId, el => ({
+  return updateElement(pages, violation.elementId, (el) => ({
     ...el,
-    fill: violation.autoFix.value
+    fill: violation.autoFix.value,
   }));
 }
 
 function fixProperty(pages, violation) {
-  return updateElement(pages, violation.elementId, el => ({
+  return updateElement(pages, violation.elementId, (el) => ({
     ...el,
-    [violation.autoFix.property]: violation.autoFix.value
+    [violation.autoFix.property]: violation.autoFix.value,
   }));
 }
 
 function addTescoTag(pages, canvasSize) {
   const { w, h } = canvasSize;
-  const background = pages[0]?.background || '#ffffff';
-  
+  const background = pages[0]?.background || "#ffffff";
+
   // Determine best text color
-  const whiteRatio = getContrastRatio('#ffffff', background);
-  const blackRatio = getContrastRatio('#000000', background);
-  const tagColor = whiteRatio > blackRatio ? '#ffffff' : '#000000';
-  
+  const whiteRatio = getContrastRatio("#ffffff", background);
+  const blackRatio = getContrastRatio("#000000", background);
+  const tagColor = whiteRatio > blackRatio ? "#ffffff" : "#000000";
+
   // Add to first page
   const newTag = {
     id: `compliance-tag-${Date.now()}`,
-    type: 'text',
-    text: 'Available at Tesco',
+    type: "text",
+    text: "Available at Tesco",
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     x: 50,
     y: h - 180, // Safe zone compliant
     fill: tagColor,
-    fontFamily: 'Inter, Arial, sans-serif',
-    align: 'left'
+    fontFamily: "Inter, Arial, sans-serif",
+    align: "left",
   };
-  
+
   const updatedPages = [...pages];
   if (updatedPages[0]) {
     updatedPages[0] = {
       ...updatedPages[0],
-      children: [...(updatedPages[0].children || []), newTag]
+      children: [...(updatedPages[0].children || []), newTag],
     };
   }
-  
+
   return updatedPages;
 }
 
 function updateElement(pages, elementId, updater) {
-  return pages.map(page => ({
+  return pages.map((page) => ({
     ...page,
-    children: (page.children || []).map(el => 
+    children: (page.children || []).map((el) =>
       el.id === elementId ? updater(el) : el
-    )
+    ),
   }));
+}
+
+function fixOverlap(pages, violation, canvasSize) {
+  // Move element down by 50px to avoid overlap
+  return updateElement(pages, violation.elementId, (el) => ({
+    ...el,
+    y: (el.y || 0) + 50,
+  }));
+}
+
+function addHeadline(pages, canvasSize) {
+  const { w, h } = canvasSize;
+  const background = pages[0]?.background || "#ffffff";
+
+  // Determine best text color
+  const whiteRatio = getContrastRatio("#ffffff", background);
+  const blackRatio = getContrastRatio("#000000", background);
+  const headlineColor = whiteRatio > blackRatio ? "#ffffff" : "#000000";
+
+  const newHeadline = {
+    id: `compliance-headline-${Date.now()}`,
+    type: "text",
+    text: "Your Headline Here",
+    fontSize: 32,
+    fontWeight: "bold",
+    x: 50,
+    y: 250, // Safe zone compliant
+    fill: headlineColor,
+    fontFamily: "Inter, Arial, sans-serif",
+    align: "left",
+  };
+
+  const updatedPages = [...pages];
+  if (updatedPages[0]) {
+    updatedPages[0] = {
+      ...updatedPages[0],
+      children: [...(updatedPages[0].children || []), newHeadline],
+    };
+  }
+
+  return updatedPages;
 }
