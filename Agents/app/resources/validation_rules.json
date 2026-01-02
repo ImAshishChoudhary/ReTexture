@@ -1,0 +1,211 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Tesco Retail Media Compliance Rules",
+  "description": "Comprehensive validation rules for advertising creative compliance",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "SAFE_ZONE_TOP",
+      "category": "layout",
+      "severity": "hard",
+      "autoFixable": true,
+      "name": "Top Safe Zone Clearance",
+      "description": "Critical UI elements (logo, headline, CTA) must not be placed in the top 200px safe zone to avoid platform UI overlap (Instagram stories, Facebook stories)",
+      "constraint": {
+        "zone": "top",
+        "clearance_px": 200,
+        "aspect_ratio": "9:16",
+        "protected_element_types": ["headline", "logo", "cta", "text", "image"]
+      },
+      "fix_instruction": "Move any element with y < 200 to y = 210 (minimum safe position). Preserve element dimensions and other properties.",
+      "example_violation": "Element at y=150 violates top safe zone",
+      "example_fix": "Move element to y=210"
+    },
+    {
+      "id": "SAFE_ZONE_BOTTOM",
+      "category": "layout",
+      "severity": "hard",
+      "autoFixable": true,
+      "name": "Bottom Safe Zone Clearance",
+      "description": "Interactive elements must not be placed in the bottom 250px safe zone to avoid swipe-up gesture interference",
+      "constraint": {
+        "zone": "bottom",
+        "clearance_px": 250,
+        "aspect_ratio": "9:16",
+        "canvas_height": 1920,
+        "protected_element_types": ["cta", "button", "link", "text"]
+      },
+      "fix_instruction": "Move any element with (y + height) > (canvas_height - 250) to new_y = canvas_height - 250 - height - 10. Ensure element remains fully visible.",
+      "example_violation": "CTA button at y=1750, height=80 extends into bottom zone (1830 > 1670)",
+      "example_fix": "Move CTA to y=1590 (1670 - 80)"
+    },
+    {
+      "id": "MIN_FONT_SIZE_HEADLINE",
+      "category": "typography",
+      "severity": "hard",
+      "autoFixable": true,
+      "name": "Headline Minimum Font Size",
+      "description": "Headlines must be at least 24px for readability on mobile devices",
+      "constraint": {
+        "element_type": "headline",
+        "min_font_size_px": 24,
+        "applies_to": ["h1", "headline", "title"]
+      },
+      "fix_instruction": "Increase fontSize property to 24 if current value is less than 24. Adjust element height if necessary to prevent text clipping (new_height = fontSize * 1.2).",
+      "example_violation": "Headline with fontSize=18",
+      "example_fix": "Set fontSize=24, height=29"
+    },
+    {
+      "id": "MIN_FONT_SIZE_SOCIAL",
+      "category": "typography",
+      "severity": "hard",
+      "autoFixable": true,
+      "name": "Social Media Minimum Font Size",
+      "description": "All text on social media formats must be at least 20px for accessibility compliance",
+      "constraint": {
+        "platform": "social",
+        "min_font_size_px": 20,
+        "element_types": ["text", "subheading", "body", "cta"]
+      },
+      "fix_instruction": "Increase fontSize to 20 for any text element below minimum. Update element dimensions proportionally.",
+      "example_violation": "Body text with fontSize=16",
+      "example_fix": "Set fontSize=20"
+    },
+    {
+      "id": "WCAG_CONTRAST_RATIO",
+      "category": "accessibility",
+      "severity": "hard",
+      "autoFixable": true,
+      "name": "WCAG Color Contrast",
+      "description": "Text must meet WCAG AA contrast ratio requirements (4.5:1 for normal text, 3:1 for large text ≥18px)",
+      "constraint": {
+        "normal_text_ratio": 4.5,
+        "large_text_ratio": 3.0,
+        "large_text_threshold_px": 18,
+        "applies_to": ["text", "headline", "subheading", "cta"]
+      },
+      "fix_instruction": "If text color fails contrast check against background: 1) Try inverting text color (black ↔ white), 2) If still failing, set text to white (#FFFFFF) on dark backgrounds or black (#000000) on light backgrounds, 3) For complex backgrounds, add semi-transparent backdrop (background-color: rgba(0,0,0,0.7) for white text or rgba(255,255,255,0.9) for black text).",
+      "example_violation": "Gray text (#888888) on light background (#EEEEEE) = 1.8:1 ratio",
+      "example_fix": "Change text color to #000000 (black) = 11.7:1 ratio"
+    },
+    {
+      "id": "LEGAL_TEXT_SIZE",
+      "category": "compliance",
+      "severity": "warning",
+      "autoFixable": true,
+      "name": "Legal Disclaimer Minimum Size",
+      "description": "Legal text (age restrictions, disclaimers) must be at least 20px height for regulatory compliance",
+      "constraint": {
+        "element_types": ["legal", "disclaimer", "age_restriction"],
+        "min_height_px": 20,
+        "detection_keywords": [
+          "18+",
+          "21+",
+          "terms apply",
+          "conditions apply",
+          "drinkaware"
+        ]
+      },
+      "fix_instruction": "Set height to minimum 20px. If text element, set fontSize to 16px (renders ~20px height with padding).",
+      "example_violation": "Legal text '18+ Drink Responsibly' with height=15px",
+      "example_fix": "Set height=20px, fontSize=16px"
+    },
+    {
+      "id": "BLOCKED_KEYWORDS",
+      "category": "compliance",
+      "severity": "hard",
+      "autoFixable": false,
+      "name": "Prohibited Marketing Terms",
+      "description": "Certain promotional terms are banned by Tesco policy (e.g., 'win', 'prize', 'competition', '50% off', 'free delivery')",
+      "constraint": {
+        "blocked_terms": [
+          "win",
+          "prize",
+          "competition",
+          "free delivery",
+          "50% off",
+          "% off",
+          "giveaway",
+          "contest"
+        ],
+        "case_insensitive": true,
+        "applies_to_element_types": ["text", "headline", "subheading", "cta"]
+      },
+      "fix_instruction": "Remove or replace blocked keywords. Suggested alternatives: 'win' → 'shop', 'prize' → 'reward', '50% off' → 'great value', 'free delivery' → 'delivery options'. If unable to substitute, flag for manual review.",
+      "example_violation": "Headline contains 'Win a £100 prize'",
+      "example_fix": "Change to 'Shop for £100 value'"
+    },
+    {
+      "id": "TESCO_BRANDING_REQUIRED",
+      "category": "branding",
+      "severity": "hard",
+      "autoFixable": true,
+      "name": "Tesco Brand Tag Presence",
+      "description": "All creatives must include Tesco branding text ('Only at Tesco', 'Available at Tesco', or 'Tesco')",
+      "constraint": {
+        "required_phrases": ["only at tesco", "available at tesco", "tesco"],
+        "case_insensitive": true,
+        "minimum_occurrences": 1
+      },
+      "fix_instruction": "If no Tesco branding text found, add a new text element with content 'Available at Tesco' positioned at bottom-left of canvas (x=20, y=canvas_height-280), fontSize=20, color=#FFFFFF, fontFamily='Tesco Modern'.",
+      "example_violation": "No Tesco branding text detected",
+      "example_fix": "Add text element: 'Available at Tesco' at (20, 1640)"
+    },
+    {
+      "id": "HEADLINE_REQUIRED",
+      "category": "content",
+      "severity": "hard",
+      "autoFixable": true,
+      "name": "Headline Presence",
+      "description": "Every creative must have a headline element to communicate the primary message",
+      "constraint": {
+        "required_element_types": ["headline", "h1"],
+        "min_font_size_px": 24,
+        "minimum_occurrences": 1
+      },
+      "fix_instruction": "If no headline element exists, add a new headline with placeholder text 'Your Message Here' positioned at (40, 300), fontSize=32, fontWeight=bold, color=#FFFFFF, fontFamily='Tesco Modern'. Recommend manual editing for final copy.",
+      "example_violation": "No headline element found in canvas",
+      "example_fix": "Add headline: 'Your Message Here' at (40, 300), fontSize=32"
+    },
+    {
+      "id": "ELEMENT_COLLISION",
+      "category": "layout",
+      "severity": "warning",
+      "autoFixable": true,
+      "name": "Element Overlap Prevention",
+      "description": "Critical elements (logo, CTA, headline) should not significantly overlap to maintain readability",
+      "constraint": {
+        "protected_element_types": ["logo", "cta", "headline", "packshot"],
+        "max_overlap_percentage": 25,
+        "collision_detection": "bounding_box"
+      },
+      "fix_instruction": "If two protected elements overlap >25%: 1) Calculate overlap area, 2) Move the smaller element away from larger element by shifting on axis with largest overlap, 3) Maintain minimum 10px spacing, 4) Prefer vertical shifts over horizontal to preserve layout flow.",
+      "example_violation": "Logo overlaps headline by 40% (120px² of 300px²)",
+      "example_fix": "Shift logo down by 50px to reduce overlap to 5%"
+    }
+  ],
+  "meta": {
+    "total_rules": 10,
+    "hard_failures": 7,
+    "warnings": 3,
+    "auto_fixable": 9,
+    "categories": [
+      "layout",
+      "typography",
+      "accessibility",
+      "compliance",
+      "branding",
+      "content"
+    ],
+    "target_platforms": [
+      "Instagram Stories",
+      "Facebook Stories",
+      "Social Media"
+    ],
+    "canvas_default_size": {
+      "width": 1080,
+      "height": 1920,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

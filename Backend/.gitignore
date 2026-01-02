@@ -1,8 +1,0 @@
-node_modules
-google-creds.json
-.env
-dist
-/generated/prisma
-.env
-.env.prod
-google-creds.json
