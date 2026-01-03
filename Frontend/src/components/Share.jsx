@@ -3,7 +3,7 @@ import { Button, Space, Popover, Tooltip, message, Modal } from "antd";
 import jsPDF from "jspdf";
 import { useState } from "react";
 import { validateCanvas } from "../compliance/checker";
-import { applyAutoFixes } from "../compliance/corrector";
+import { applyAutoFixes, applyAutoFixesWithBackend } from "../compliance/corrector";
 import ValidationChecklist from "./ValidationChecklist";
 
 import { BsDownload } from "react-icons/bs";
@@ -166,40 +166,49 @@ export default function Share({ stageRef }) {
     setPendingExport(null);
   };
 
-  const handleAutoFix = () => {
+  const handleAutoFix = async () => {
     setExporting(true);
-    message.loading({ content: "Applying compliance fixes...", key: "autofix" });
+    message.loading({ content: "Applying AI-powered compliance fixes...", key: "autofix" });
     
     try {
       // Get current validation result
       const validationResult = validateCanvas(editorPages, canvasSize, { formatType: 'social' });
       
-      // Apply auto-fixes
-      const { correctedPages, fixesApplied, remainingIssues } = applyAutoFixes(
+      // Apply AI-powered auto-fixes from backend
+      const result = await applyAutoFixesWithBackend(
         editorPages,
         canvasSize,
         validationResult.violations
       );
       
-      const { setEditorPages } = useEditorStore.getState();
-      setEditorPages(correctedPages);
+      if (!result.success) {
+        throw new Error(result.error || "Auto-fix failed");
+      }
       
-      message.success({ content: `Applied ${fixesApplied} compliance fixes!`, key: "autofix" });
+      const { setEditorPages } = useEditorStore.getState();
+      setEditorPages(result.correctedPages);
+      
+      message.success({ 
+        content: `Applied ${result.fixesApplied} AI-powered compliance fixes!`, 
+        key: "autofix" 
+      });
       
       // Check if now compliant
-      if (remainingIssues.length === 0) {
+      if (result.remainingIssues && result.remainingIssues.length === 0) {
         handleCloseValidation();
         message.success("Design is now compliant! You can export.");
       } else {
         setValidationData(formatValidationResultForUI({
           compliant: false,
-          violations: remainingIssues,
-          warnings: []
+          violations: result.remainingIssues || [],
+          warnings: result.remainingWarnings || []
         }));
       }
     } catch (error) {
-      console.error("Auto-fix error:", error);
-      message.error({ content: "Failed to apply fixes", key: "autofix" });
+      console.error("❌ AI auto-fix error:", error);
+      console.error("❌ Error stack:", error.stack);
+      message.error({ content: "AI fix failed: " + error.message, key: "autofix" });
+      throw error; // Don't swallow the error
     } finally {
       setExporting(false);
     }

@@ -1,6 +1,7 @@
 """
 AI-powered compliance validation using Gemini guardrails
 """
+
 from google import genai
 from google.genai import types
 from fastapi import HTTPException
@@ -19,7 +20,7 @@ def validate_with_gemini_guardrail(request: GenerationRequest):
     Hard blocks generation if critical violations found.
     """
     text = f"Headline: {request.headline}\nSubhead: {request.subhead}"
-    
+
     prompt = f"""
 You are a Tesco compliance validator. Analyze this banner text for violations:
 
@@ -40,41 +41,38 @@ Return ONLY valid JSON in this exact format:
     "suggestions": ["how to fix each issue, empty if none"]
 }}
 """
-    
+
     try:
         client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
-        
+
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-flash",
             contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        
+
         result = json.loads(response.text)
-        
+
     except Exception as e:
         # Fallback to basic keyword check if Gemini fails
         print(f"Gemini validation failed: {e}, using fallback")
-        result = {
-            "compliant": True,
-            "issues": [],
-            "suggestions": []
-        }
-    
+        result = {"compliant": True, "issues": [], "suggestions": []}
+
     # Value tile validation
     if request.value_tile == "clubcard" and not request.value_tile_end_date:
         result["compliant"] = False
         result["issues"].append("Clubcard value tile requires end date (DD/MM format)")
         result["suggestions"].append("Add end date in DD/MM format (e.g., 23/05)")
-    
+
     # Hard block if non-compliant
     if not result["compliant"]:
-        raise HTTPException(400, detail={
-            "error": "Compliance violations detected",
-            "issues": result["issues"],
-            "suggestions": result.get("suggestions", [])
-        })
-    
+        raise HTTPException(
+            400,
+            detail={
+                "error": "Compliance violations detected",
+                "issues": result["issues"],
+                "suggestions": result.get("suggestions", []),
+            },
+        )
+
     return True

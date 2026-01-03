@@ -33,7 +33,7 @@ import AddPage from "../components/AddPage";
 import EditorColorPicker from "../components/EditorColorPicker";
 import { serializeToHTML, logToConsole } from "../utils/serializeToHTML";
 import { validateCanvas } from "../compliance/checker";
-import { applyAutoFixes } from "../compliance/corrector";
+import { applyAutoFixes, applyAutoFixesWithBackend } from "../compliance/corrector";
 import StickerLibrary from "../components/StickerLibrary";
 
 export default function Editor() {
@@ -390,33 +390,49 @@ export default function Editor() {
     }
   };
 
-  const handleAutoFix = () => {
+  const handleAutoFix = async () => {
     console.log("🔧 [EDITOR] Auto-fix triggered");
+    console.log("📊 [EDITOR] Current state:", {
+      editorPagesCount: editorPages.length,
+      canvasSize,
+      violationsCount: rawViolations.length,
+      violations: rawViolations
+    });
     setValidationLoading(true);
 
     try {
       console.log(
-        `📋 [EDITOR] Applying fixes for ${rawViolations.length} violations`
+        `📋 [EDITOR] Applying AI-powered fixes for ${rawViolations.length} violations`
       );
+      console.log("🚀 [EDITOR] Calling applyAutoFixesWithBackend...");
 
-      const { correctedPages, fixesApplied, remainingIssues } = applyAutoFixes(
+      // Use backend AI-powered auto-fix
+      const result = await applyAutoFixesWithBackend(
         editorPages,
         canvasSize,
         rawViolations
       );
 
+      console.log("📥 [EDITOR] Backend response received:", result);
+
+      if (!result.success) {
+        throw new Error(result.error || "Auto-fix failed");
+      }
+
       console.log(
-        `✅ [EDITOR] Auto-fix complete: ${fixesApplied} fixes applied, ${remainingIssues.length} remaining`
+        `✅ [EDITOR] AI auto-fix complete: ${result.fixesApplied} fixes applied (${result.llmIterations} LLM iterations)`
       );
 
       // Update the canvas with corrected pages
-      setEditorPages(correctedPages);
-      setPushHistory(correctedPages);
+      setEditorPages(result.correctedPages);
+      setPushHistory(result.correctedPages);
 
-      message.success(`Applied ${fixesApplied} compliance fixes!`);
+      message.success(
+        `Applied ${result.fixesApplied} AI-powered compliance fixes!`
+      );
 
       // Close modal if fully compliant
-      if (remainingIssues.length === 0) {
+      if (result.remainingIssues && result.remainingIssues.length === 0) {
         console.log("🎉 [EDITOR] All issues resolved, closing modal");
         setShowValidationModal(false);
         message.success("Design is now compliant!");
@@ -427,7 +443,9 @@ export default function Editor() {
       }
     } catch (error) {
       console.error("❌ [EDITOR] Auto-fix error:", error);
-      message.error("Failed to apply fixes: " + error.message);
+      console.error("❌ [EDITOR] Error stack:", error.stack);
+      message.error("Failed to apply AI fixes: " + error.message);
+      throw error; // Don't swallow the error
     } finally {
       setValidationLoading(false);
     }

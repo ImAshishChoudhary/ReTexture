@@ -1,10 +1,12 @@
 /**
  * Corrector: Auto-fix engine
  * Applies transformations to resolve violations
+ * Supports both local rule-based fixes and AI-powered backend fixes
  */
 
 import { validateCanvas } from "./checker";
 import { getContrastRatio } from "./utils/color";
+// Local sticker-based fixes (from main branch)
 import { getStickerById, calculateStickerSize } from "../config/stickerConfig";
 import { findOptimalStickerPosition } from "../services/stickerPositionService";
 import {
@@ -12,6 +14,9 @@ import {
   generateSubheadings,
   getSmartPlacement,
 } from "../api/headlineApi";
+// AI-powered backend fixes (from feat/autofix branch)
+import { requestAutoFix } from "../api/validationApi";
+import { serializeToHTML } from "../utils/serializeToHTML";
 
 export async function applyAutoFixes(editorPages, canvasSize, violations) {
   console.log("🔧 [AUTO-FIX] Starting auto-correction...");
@@ -801,3 +806,258 @@ function addDrinkawareSticker(pages, canvasSize) {
 
   return updatedPages;
 }
+
+/**
+ * AI-Powered Auto-Fix using Backend LLM
+ * 
+ * @param {Array} editorPages - Current canvas pages
+ * @param {Object} canvasSize - Canvas dimensions {w, h}
+ * @param {Array} violations - Detected violations
+ * @returns {Promise<Object>} {success, correctedPages, fixesApplied, error}
+ */
+export async function applyAutoFixesWithBackend(editorPages, canvasSize, violations) {
+  console.log("🤖 [AI AUTO-FIX] Starting AI-powered auto-correction...");
+  console.log(`📋 Total violations: ${violations.length}`);
+  console.log("📊 [AI AUTO-FIX] Input data:", {
+    editorPages: editorPages.length,
+    canvasSize,
+    violations: violations.map(v => ({ rule: v.rule, elementId: v.elementId }))
+  });
+
+  try {
+    // Step 1: Validate inputs and serialize canvas to HTML/CSS
+    if (!canvasSize || typeof canvasSize.w !== 'number' || typeof canvasSize.h !== 'number') {
+      throw new Error('Invalid canvasSize: expected { w: number, h: number }');
+    }
+
+    const activePage = editorPages[0]; // Currently only fixing first page
+    if (!activePage) {
+      throw new Error("No active page to fix");
+    }
+
+    console.log("📝 [AI AUTO-FIX] Active page:", {
+      childrenCount: activePage.children?.length || 0,
+      background: activePage.background
+    });
+
+    // Pass canvasSize through to serialization (fixes undefined .w/.h errors)
+    const serialized = serializeToHTML(editorPages, 0, canvasSize);
+    console.log("📄 [AI AUTO-FIX] Canvas serialized to HTML");
+    console.log("📏 [AI AUTO-FIX] Serialized sizes:", {
+      htmlLength: serialized.html.length,
+      cssLength: serialized.css.length
+    });
+
+    // Step 2: Extract images (create placeholder map)
+    const imageMap = {};
+    let imageCounter = 0;
+    
+    // Find all image elements and map to placeholders
+    activePage.children?.forEach((el) => {
+      if (el.type === 'image' && el.src) {
+        const placeholder = `IMG_${++imageCounter}`;
+        imageMap[placeholder] = el.src;
+      }
+    });
+
+    console.log(`🖼️ [AI AUTO-FIX] Extracted ${imageCounter} images`);
+
+    // Step 3: Call backend auto-fix API
+    console.log("📡 [AI AUTO-FIX] Preparing API request...");
+    const apiRequest = {
+      html: serialized.html,
+      css: serialized.css,
+      images: imageMap,
+      violations: violations.map(v => ({
+        elementId: v.elementId || null,
+        rule: v.rule,
+        severity: v.severity || 'hard',
+        message: v.message,
+        autoFixable: v.autoFixable !== false
+      })),
+      canvasWidth: canvasSize.w,
+      canvasHeight: canvasSize.h
+    };
+    
+    console.log("🚀 [AI AUTO-FIX] Sending request to backend API...");
+    console.log("📦 [AI AUTO-FIX] Request payload:", {
+      htmlLength: apiRequest.html.length,
+      cssLength: apiRequest.css.length,
+      imageCount: Object.keys(apiRequest.images).length,
+      violationCount: apiRequest.violations.length,
+      canvasSize: { w: apiRequest.canvasWidth, h: apiRequest.canvasHeight }
+    });
+    
+    const response = await requestAutoFix(apiRequest);
+    
+    console.log("📥 [AI AUTO-FIX] Response received from backend:", response);
+
+    if (!response.success) {
+      console.error("❌ [AI AUTO-FIX] Backend auto-fix failed:", response.error);
+      return {
+        success: false,
+        correctedPages: editorPages,
+        fixesApplied: 0,
+        error: response.error || "Auto-fix failed"
+      };
+    }
+
+    console.log(`✅ [AI AUTO-FIX] Received ${response.fixes_applied.length} fixes from AI`);
+
+    // Step 4: Parse corrected HTML back to canvas elements
+    const correctedPages = parseHTMLToCanvas(
+      response.corrected_html,
+      response.corrected_css,
+      editorPages,
+      canvasSize
+    );
+
+    // Step 5: Re-validate
+    console.log("🔄 [AI AUTO-FIX] Re-validating after AI fixes...");
+    const recheckResult = validateCanvas(correctedPages, canvasSize);
+    console.log(
+      `📊 Re-validation result: ${
+        recheckResult.compliant ? "COMPLIANT ✅" : "STILL NON-COMPLIANT ⚠️"
+      }`
+    );
+    console.log(`📈 New score: ${recheckResult.score}/100`);
+
+    return {
+      success: true,
+      correctedPages,
+      fixesApplied: response.fixes_applied.length,
+      fixDetails: response.fixes_applied,
+      remainingIssues: recheckResult.violations,
+      remainingWarnings: recheckResult.warnings,
+      llmIterations: response.llm_iterations
+    };
+
+  } catch (error) {
+    console.error("❌ [AI AUTO-FIX] Fatal error:", error);
+    return {
+      success: false,
+      correctedPages: editorPages,
+      fixesApplied: 0,
+      error: error.message || "Unexpected error during AI auto-fix"
+    };
+  }
+}
+
+
+/**
+ * Parse corrected HTML/CSS back to canvas element structure
+ * Maps HTML changes back to Zustand state format
+ * 
+ * @param {string} html - Corrected HTML from backend
+ * @param {string} css - Corrected CSS from backend
+ * @param {Array} originalPages - Original canvas pages for fallback
+ * @param {Object} canvasSize - Canvas dimensions
+ * @returns {Array} Updated canvas pages
+ */
+function parseHTMLToCanvas(html, css, originalPages, canvasSize) {
+  console.log("🔄 [AI AUTO-FIX] Parsing corrected HTML back to canvas...");
+
+  try {
+    // Create a temporary DOM parser
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const styleSheet = parseCSSToObject(css);
+
+    const updatedChildren = [];
+
+    // Find canvas container
+    const container = doc.querySelector('.canvas-container');
+    if (!container) {
+      console.warn("⚠️ [AI AUTO-FIX] No canvas-container found, using original");
+      return originalPages;
+    }
+
+    // Parse each element
+    Array.from(container.children).forEach((domElement, index) => {
+      const className = domElement.className;
+      const styles = styleSheet[`.${className}`] || {};
+
+      // Extract element type and ID from class name (e.g., "element-text-abc123")
+      const classMatch = className.match(/element-(\w+)-(.+)/);
+      if (!classMatch) return;
+
+      const [, type, id] = classMatch;
+
+      // Build canvas element object
+      const canvasElement = {
+        id: id,
+        type: type,
+        x: parseFloat(styles.left) || 0,
+        y: parseFloat(styles.top) || 0,
+        width: parseFloat(styles.width) || 100,
+        height: parseFloat(styles.height) || 50
+      };
+
+      // Type-specific properties
+      if (type === 'text' || type === 'headline' || type === 'subheading') {
+        canvasElement.text = domElement.textContent || '';
+        canvasElement.fontSize = parseFloat(styles['font-size']) || 16;
+        canvasElement.fontFamily = styles['font-family'] || 'Inter';
+        canvasElement.fill = styles.color || '#000000';
+        canvasElement.fontWeight = styles['font-weight'] || 'normal';
+        canvasElement.align = styles['text-align'] || 'left';
+      } else if (type === 'image') {
+        canvasElement.src = domElement.src || '';
+      } else if (type === 'shape') {
+        canvasElement.fill = styles['background-color'] || '#cccccc';
+      }
+
+      updatedChildren.push(canvasElement);
+    });
+
+    console.log(`✅ [AI AUTO-FIX] Parsed ${updatedChildren.length} elements from HTML`);
+
+    // Update first page with corrected children
+    const updatedPages = [...originalPages];
+    if (updatedPages[0]) {
+      updatedPages[0] = {
+        ...updatedPages[0],
+        children: updatedChildren
+      };
+    }
+
+    return updatedPages;
+
+  } catch (error) {
+    console.error("❌ [AI AUTO-FIX] HTML parsing failed:", error);
+    return originalPages; // Fallback to original on error
+  }
+}
+
+
+/**
+ * Parse CSS string to object map
+ * 
+ * @param {string} css - CSS string
+ * @returns {Object} {selector: {property: value}}
+ */
+function parseCSSToObject(css) {
+  const styleMap = {};
+  
+  // Simple regex-based CSS parser
+  const ruleRegex = /([^{]+)\{([^}]+)\}/g;
+  let match;
+
+  while ((match = ruleRegex.exec(css)) !== null) {
+    const selector = match[1].trim();
+    const declarations = match[2].trim();
+    
+    const properties = {};
+    declarations.split(';').forEach(decl => {
+      const [prop, value] = decl.split(':').map(s => s?.trim());
+      if (prop && value) {
+        properties[prop] = value;
+      }
+    });
+
+    styleMap[selector] = properties;
+  }
+
+  return styleMap;
+}
+

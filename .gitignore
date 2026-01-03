@@ -1,2 +1,8 @@
-/Frontend
-/h origin main
+# Project ignores
+/Frontend/node_modules
+**node_modules**
+**.next**
+.github/
+*.env
+.env.*
+!.env.example
