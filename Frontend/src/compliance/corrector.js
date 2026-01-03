@@ -140,6 +140,18 @@ export async function applyAutoFixes(editorPages, canvasSize, violations) {
         console.log(`      Suggestion: Remove or rephrase the flagged text`);
         unfixedViolations.push(violation);
         break;
+        
+      case 'CTA_NOT_ALLOWED':
+        console.log(`  ↳ Removing CTA element ${violation.elementId}`);
+        correctedPages = removeElement(correctedPages, violation.elementId);
+        fixesApplied++;
+        break;
+        
+      case 'CONTRAST_APCA_WARNING':
+        console.log(`  ↳ Fixing APCA contrast warning for ${violation.elementId}`);
+        correctedPages = fixContrast(correctedPages, violation);
+        fixesApplied++;
+        break;
 
       default:
         console.log(`  ⚠️ Unknown rule type: ${violation.rule}`);
@@ -1061,3 +1073,9 @@ function parseCSSToObject(css) {
   return styleMap;
 }
 
+function removeElement(pages, elementId) {
+  return pages.map(page => ({
+    ...page,
+    children: (page.children || []).filter(el => el.id !== elementId)
+  }));
+}

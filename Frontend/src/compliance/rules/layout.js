@@ -1,5 +1,5 @@
 /**
- * Layout rules: Safe zones, element overlaps
+ * Layout rules: Safe zones, element overlaps, CTA detection, value tiles, packshot zones
  */
 
 import CONSTANTS from '../constants.json';
@@ -70,7 +70,7 @@ export function checkOverlaps(elements) {
   console.log('  ↳ Elements count:', elements.length);
   
   const violations = [];
-  const protectedTypes = ['logo', 'cta', 'packshot'];
+  const protectedTypes = ['logo', 'cta', 'packshot', 'valueTile'];
   console.log('  ↳ Protected types:', protectedTypes);
   
   let checksPerformed = 0;
@@ -143,4 +143,178 @@ export function checkMinFontSize(elements, formatType = 'social') {
   
   console.log(`✅ checkMinFontSize complete: ${violations.length} violations`);
   return violations;
+}
+
+/**
+ * Check for CTA (Call-to-Action) elements
+ * Tesco rule: CTA is not allowed
+ */
+export function checkCTA(elements) {
+  console.log('🔍 [LAYOUT RULES] checkCTA called');
+  console.log('  ↳ Elements count:', elements.length);
+  
+  const violations = [];
+  const ctaElements = elements.filter(el => el.type === 'cta' || el.type === 'button');
+  
+  console.log(`  ↳ CTA/Button elements found: ${ctaElements.length}`);
+  
+  ctaElements.forEach((el, index) => {
+    console.log(`  ⚠️ CTA DETECTED: ${el.id} (type: ${el.type})`);
+    violations.push({
+      elementId: el.id,
+      rule: 'CTA_NOT_ALLOWED',
+      severity: 'hard',
+      message: 'CTA (Call-to-Action) elements are not allowed in Tesco brand designs',
+      autoFixable: true,
+      autoFix: {
+        action: 'remove_element',
+        elementId: el.id
+      }
+    });
+  });
+  
+  console.log(`✅ checkCTA complete: ${violations.length} violations`);
+  return violations;
+}
+
+/**
+ * Check value tiles for positioning and overlaps
+ * Tesco rules: 
+ * - Position is predefined, cannot be moved
+ * - Nothing may overlap value tiles
+ */
+export function checkValueTiles(elements) {
+  console.log('🔍 [LAYOUT RULES] checkValueTiles called');
+  console.log('  ↳ Elements count:', elements.length);
+  
+  const violations = [];
+  const valueTiles = elements.filter(el => el.type === 'valueTile');
+  
+  console.log(`  ↳ Value tiles found: ${valueTiles.length}`);
+  
+  if (valueTiles.length === 0) {
+    console.log('  ⏭️ No value tiles, skipping checks');
+    return violations;
+  }
+  
+  // Check for overlaps with value tiles
+  valueTiles.forEach(tile => {
+    const tileBox = getBoundingBox(tile);
+    
+    elements.forEach(el => {
+      if (el.id === tile.id) return; // Skip self
+      
+      const elBox = getBoundingBox(el);
+      
+      if (intersects(tileBox, elBox)) {
+        console.log(`  ⚠️ OVERLAP WITH VALUE TILE! ${el.id} overlaps ${tile.id}`);
+        violations.push({
+          elementId: el.id,
+          rule: 'VALUE_TILE_OVERLAP',
+          severity: 'hard',
+          message: `Element overlaps with value tile. Nothing may overlap value tiles.`,
+          autoFixable: false,
+          metadata: {
+            valueTileId: tile.id,
+            overlappingElementId: el.id
+          }
+        });
+      }
+    });
+  });
+  
+  console.log(`✅ checkValueTiles complete: ${violations.length} violations`);
+  return violations;
+}
+
+/**
+ * Check packshot safe zones
+ * Tesco rules:
+ * - 24px minimum gap (double density)
+ * - 12px minimum gap (single density)
+ */
+export function checkPackshotSafeZone(elements, formatType = 'social') {
+  console.log('🔍 [LAYOUT RULES] checkPackshotSafeZone called');
+  console.log('  ↳ Elements count:', elements.length);
+  console.log('  ↳ Format type:', formatType);
+  
+  const violations = [];
+  const packshots = elements.filter(el => el.type === 'packshot' || el.type === 'image');
+  
+  console.log(`  ↳ Packshot/image elements found: ${packshots.length}`);
+  
+  if (packshots.length === 0) {
+    console.log('  ⏭️ No packshots, skipping checks');
+    return violations;
+  }
+  
+  // Determine required safe zone based on format
+  const isSingleDensity = formatType.includes('single');
+  const requiredGap = isSingleDensity ? 12 : 24;
+  
+  console.log(`  ↳ Required gap: ${requiredGap}px (${isSingleDensity ? 'single' : 'double'} density)`);
+  
+  // Check distance between packshots and other elements
+  packshots.forEach(packshot => {
+    const packshotBox = getBoundingBox(packshot);
+    
+    elements.forEach(el => {
+      if (el.id === packshot.id) return; // Skip self
+      if (el.type === 'background') return; // Skip background
+      
+      const elBox = getBoundingBox(el);
+      
+      // Calculate minimum distance between boxes
+      const distance = calculateMinDistance(packshotBox, elBox);
+      
+      if (distance < requiredGap && distance >= 0) {
+        console.log(`  ⚠️ PACKSHOT TOO CLOSE! ${el.id} is ${distance.toFixed(1)}px from ${packshot.id} (required: ${requiredGap}px)`);
+        violations.push({
+          elementId: el.id,
+          rule: 'PACKSHOT_SAFE_ZONE',
+          severity: 'hard',
+          message: `Element is ${distance.toFixed(1)}px from packshot (minimum ${requiredGap}px required)`,
+          autoFixable: false,
+          metadata: {
+            packshotId: packshot.id,
+            currentDistance: distance,
+            requiredDistance: requiredGap
+          }
+        });
+      }
+    });
+  });
+  
+  console.log(`✅ checkPackshotSafeZone complete: ${violations.length} violations`);
+  return violations;
+}
+
+/**
+ * Calculate minimum distance between two bounding boxes
+ */
+function calculateMinDistance(box1, box2) {
+  // If boxes overlap, distance is negative (intersecting)
+  if (intersects(box1, box2)) {
+    return -1;
+  }
+  
+  // Calculate distances in each direction
+  const horizontalDistance = Math.max(
+    box1.x - (box2.x + box2.width),
+    box2.x - (box1.x + box1.width),
+    0
+  );
+  
+  const verticalDistance = Math.max(
+    box1.y - (box2.y + box2.height),
+    box2.y - (box1.y + box1.height),
+    0
+  );
+  
+  // Return minimum of horizontal and vertical distance
+  if (horizontalDistance === 0) return verticalDistance;
+  if (verticalDistance === 0) return horizontalDistance;
+  
+  // Diagonal distance (pythagoras)
+  return Math.sqrt(horizontalDistance ** 2 + verticalDistance ** 2);
 }

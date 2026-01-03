@@ -1,249 +1,164 @@
 /**
- * Visual rules: Contrast, Drinkaware logo, Face Detection
+ * Visual rules: Contrast (APCA + WCAG 2.1), Drinkaware logo, Face Detection
  */
 
-import CONSTANTS from "../constants.json";
-import { getContrastRatio } from "../utils/color";
-// Face detection is loaded dynamically to avoid breaking the module if TF.js fails
+import CONSTANTS from '../constants.json';
+import { 
+  checkAPCAContrast, 
+  checkWCAGContrast,
+  suggestAccessibleColor 
+} from '../utils/color';
 
 /**
- * FIRST PRINCIPLE: Calculate actual background color at element's position
- * Don't assume canvas background - find what's actually behind the text!
+ * Check text contrast using APCA algorithm (with WCAG 2.1 fallback)
+ * Context-aware: considers font size, weight, and type
+ * 
+ * @param {Array} elements - Canvas elements
+ * @param {string} background - Background color (hex)
+ * @returns {Array} Array of contrast violations
  */
-function getActualBackgroundAtPosition(element, allElements, canvasBackground) {
-  const { x = 0, y = 0, width = 100, height = 100 } = element;
-  const centerX = x + width / 2;
-  const centerY = y + height / 2;
-
-  console.log(
-    `    🔍 Finding background at (${centerX.toFixed(0)}, ${centerY.toFixed(
-      0
-    )})`
-  );
-
-  // Find elements behind this one (lower z-index or earlier in array)
-  const elementIndex = allElements.findIndex((el) => el.id === element.id);
-  const elementsBelow = allElements.slice(0, elementIndex).reverse();
-
-  // Check what's behind: images, shapes, etc.
-  for (const behindEl of elementsBelow) {
-    const behindX = behindEl.x || 0;
-    const behindY = behindEl.y || 0;
-    const behindW = behindEl.width || 100;
-    const behindH = behindEl.height || 100;
-
-    // Check if element is behind our text (overlaps)
-    if (
-      centerX >= behindX &&
-      centerX <= behindX + behindW &&
-      centerY >= behindY &&
-      centerY <= behindY + behindH
-    ) {
-      console.log(
-        `      ↳ Found element behind: ${behindEl.type} (${behindEl.id})`
-      );
-
-      // For images, we can't know the exact color without pixel analysis
-      // So we'll use a conservative approach: assume dark for images
-      if (behindEl.type === "image") {
-        console.log(
-          `      ↳ Image detected - assuming DARK background (#1a1a1a)`
-        );
-        return "#1a1a1a"; // Dark color for safety with images
-      }
-
-      // For shapes/rectangles, use their fill color
-      if (behindEl.fill) {
-        console.log(`      ↳ Using element fill: ${behindEl.fill}`);
-        return behindEl.fill;
-      }
-    }
-  }
-
-  console.log(
-    `      ↳ No element behind, using canvas background: ${canvasBackground}`
-  );
-  return canvasBackground;
-}
-
-export function checkContrast(allElements, canvasBackground) {
-  console.log("🔍 [VISUAL RULES] checkContrast called");
-  console.log("  ↳ Elements count:", allElements.length);
-  console.log("  ↳ Canvas background:", canvasBackground);
-
+export function checkContrast(elements, background) {
+  console.log('🔍 [VISUAL RULES - APCA] checkContrast called');
+  console.log('  ↳ Elements count:', elements.length);
+  console.log('  ↳ Background:', background);
+  
   const violations = [];
-  const checkableElements = allElements.filter(
-    (el) => el.type === "text" || el.type === "icon"
-  );
-  console.log(
-    `  ↳ Checkable elements (text/icon): ${checkableElements.length}`
-  );
-
+  const checkableElements = elements.filter(el => el.type === 'text' || el.type === 'icon');
+  console.log(`  ↳ Checkable text/icon elements: ${checkableElements.length}`);
+  
   checkableElements.forEach((el, index) => {
-    const color = el.fill || "#000000";
+    const color = el.fill || '#000000';
     const fontSize = el.fontSize || 16;
-    const elementType = el.id?.includes("headline")
-      ? "HEADLINE"
-      : el.id?.includes("subheading")
-      ? "SUBHEADING"
-      : "TEXT";
-
-    console.log(
-      `  🔍 Checking ${elementType} ${index + 1}/${checkableElements.length}: ${
-        el.id
-      }`
-    );
-    console.log(`    ↳ Text: "${el.text?.substring(0, 50) || "N/A"}"`);
-    console.log(`    ↳ Color: ${color}, Font size: ${fontSize}px`);
-    console.log(
-      `    ↳ Position: (${(el.x || 0).toFixed(0)}, ${(el.y || 0).toFixed(0)})`
-    );
-
-    // FIRST PRINCIPLE: Get ACTUAL background at this element's position
-    const actualBackground = getActualBackgroundAtPosition(
-      el,
-      allElements,
-      canvasBackground
-    );
-    console.log(`    ↳ Actual background: ${actualBackground}`);
-
-    const ratio = getContrastRatio(color, actualBackground);
-    const minRatio =
-      fontSize >= CONSTANTS.WCAG.LARGE_TEXT_SIZE
-        ? CONSTANTS.WCAG.LARGE_TEXT_RATIO
-        : CONSTANTS.WCAG.MIN_RATIO;
-
-    console.log(
-      `    ↳ Contrast ratio: ${ratio.toFixed(2)}:1, Required: ${minRatio}:1 ${
-        ratio >= minRatio ? "✅ PASS" : "❌ FAIL"
-      }`
-    );
-
-    if (ratio < minRatio) {
-      // FIRST PRINCIPLE: Calculate fix based on ACTUAL background, not canvas background
-      const whiteRatio = getContrastRatio("#ffffff", actualBackground);
-      const blackRatio = getContrastRatio("#000000", actualBackground);
-
-      // Choose color with BETTER contrast
-      const fixColor = whiteRatio > blackRatio ? "#ffffff" : "#000000";
-      const fixRatio = Math.max(whiteRatio, blackRatio);
-
-      console.log(`    ⚠️ CONTRAST FAIL for ${elementType}!`);
-      console.log(
-        `      ↳ Current: ${color} on ${actualBackground} = ${ratio.toFixed(
-          2
-        )}:1`
-      );
-      console.log(
-        `      ↳ White option: ${whiteRatio.toFixed(2)}:1 ${
-          whiteRatio >= minRatio ? "✅" : "❌"
-        }`
-      );
-      console.log(
-        `      ↳ Black option: ${blackRatio.toFixed(2)}:1 ${
-          blackRatio >= minRatio ? "✅" : "❌"
-        }`
-      );
-      console.log(`      ↳ Auto-fix: ${fixColor} (${fixRatio.toFixed(2)}:1)`);
-
+    const fontWeight = el.bold ? 700 : (el.fontWeight || 400);
+    
+    console.log(`  🔍 [${index + 1}/${checkableElements.length}] Checking: ${el.id}`);
+    console.log(`    ↳ Color: ${color}, Size: ${fontSize}px, Weight: ${fontWeight}`);
+    
+    // Build context for APCA
+    const context = {
+      fontSize,
+      fontWeight,
+      usage: fontSize >= 24 ? 'heading' : 'body'
+    };
+    
+    // Check using APCA (primary) and WCAG 2.1 (fallback)
+    const apcaResult = checkAPCAContrast(color, background, context);
+    const wcagResult = checkWCAGContrast(color, background, context);
+    
+    console.log(`    ↳ APCA: ${apcaResult.contrast}Lc (required: ${apcaResult.required}Lc) - ${apcaResult.passes ? 'PASS' : 'FAIL'}`);
+    console.log(`    ↳ WCAG 2.1: ${wcagResult.contrast}:1 (required: ${wcagResult.required}:1) - ${wcagResult.passes ? 'PASS' : 'FAIL'}`);
+    
+    // Fail if BOTH algorithms fail (defensive approach)
+    if (!apcaResult.passes && !wcagResult.passes) {
+      // Suggest best color using APCA-optimized algorithm
+      const suggestion = suggestAccessibleColor(background, context);
+      
+      console.log(`    ⚠️ CONTRAST FAIL (both APCA & WCAG)`);
+      console.log(`      ↳ Suggested fix: ${suggestion.color} (${suggestion.contrast}Lc)`);
+      
       violations.push({
         elementId: el.id,
-        rule: "CONTRAST_FAIL",
-        severity: "hard",
-        message: `Contrast ratio ${ratio.toFixed(
-          2
-        )}:1 is below ${minRatio}:1 requirement`,
+        rule: 'CONTRAST_FAIL',
+        severity: 'hard',
+        message: `Contrast ${apcaResult.contrast}Lc is below ${apcaResult.required}Lc requirement (APCA). WCAG 2.1: ${wcagResult.contrast}:1 vs ${wcagResult.required}:1`,
         autoFixable: true,
         autoFix: {
-          property: "fill",
-          value: fixColor,
-          calculatedAgainst: actualBackground, // Store for debugging
+          property: 'fill',
+          value: suggestion.color
         },
+        metadata: {
+          currentAPCA: apcaResult.contrast,
+          requiredAPCA: apcaResult.required,
+          currentWCAG: wcagResult.contrast,
+          requiredWCAG: wcagResult.required,
+          suggestedAPCA: suggestion.contrast
+        }
       });
+    } else if (!apcaResult.passes) {
+      // Warning: Passes WCAG but fails APCA (possible false positive)
+      console.log(`    ⚠️ APCA FAIL (but WCAG passes - possible WCAG 2.1 false positive)`);
+      
+      violations.push({
+        elementId: el.id,
+        rule: 'CONTRAST_APCA_WARNING',
+        severity: 'warning',
+        message: `Passes WCAG 2.1 (${wcagResult.contrast}:1) but fails APCA (${apcaResult.contrast}Lc < ${apcaResult.required}Lc). May be a WCAG 2.1 false positive.`,
+        autoFixable: true,
+        autoFix: {
+          property: 'fill',
+          value: suggestAccessibleColor(background, context).color
+        },
+        metadata: {
+          apcaContrast: apcaResult.contrast,
+          wcagContrast: wcagResult.contrast
+        }
+      });
+    } else {
+      console.log(`    ✅ PASS (both algorithms)`);
     }
   });
-
+  
   console.log(`✅ checkContrast complete: ${violations.length} violations`);
   return violations;
 }
 
+
 export function checkDrinkawareLogo(elements, isAlcohol = false) {
-  console.log("🔍 [VISUAL RULES] checkDrinkawareLogo called");
-  console.log("  ↳ Elements count:", elements.length);
-  console.log("  ↳ Is alcohol campaign?", isAlcohol);
-
+  console.log('🔍 [VISUAL RULES] checkDrinkawareLogo called');
+  console.log('  ↳ Elements count:', elements.length);
+  console.log('  ↳ Is alcohol campaign?', isAlcohol);
+  
   const violations = [];
-
+  
   if (!isAlcohol) {
-    console.log("  ⏭️ Not alcohol campaign, skipping Drinkaware checks");
+    console.log('  ⏭️ Not alcohol campaign, skipping Drinkaware checks');
     return violations;
   }
-
-  // Check for Drinkaware logo OR sticker
-  const hasDrinkaware = elements.some((el) => {
-    // Check logo images
-    if (el.type === "logo" || el.type === "image") {
-      return (el.src || "").toLowerCase().includes("drinkaware");
-    }
-    // Check stickers
-    if (el.type === "sticker") {
-      return (
-        el.stickerId === "drinkaware" ||
-        el.metadata?.satisfiesRule === "MISSING_DRINKAWARE"
-      );
-    }
-    return false;
-  });
-
-  console.log("  ↳ Has Drinkaware logo/sticker?", hasDrinkaware);
-
+  
+  const hasDrinkaware = elements.some(el => 
+    el.type === 'logo' && 
+    (el.src || '').toLowerCase().includes('drinkaware')
+  );
+  
+  console.log('  ↳ Has Drinkaware logo?', hasDrinkaware);
+  
   if (!hasDrinkaware) {
-    console.log("  ⚠️ MISSING DRINKAWARE LOGO!");
+    console.log('  ⚠️ MISSING DRINKAWARE LOGO!');
     violations.push({
       elementId: null,
-      rule: "MISSING_DRINKAWARE",
-      severity: "hard",
-      message: "Drinkaware logo is required for alcohol campaigns",
-      autoFixable: true, // Can now auto-add sticker
-      autoFix: {
-        action: "add_sticker",
-        stickerId: "drinkaware",
-      },
+      rule: 'MISSING_DRINKAWARE',
+      severity: 'hard',
+      message: 'Drinkaware logo is required for alcohol campaigns',
+      autoFixable: false,
+      autoFix: null
     });
   } else {
     // Check minimum size
-    const drinkawareLogo = elements.find((el) => {
-      if (el.type === "logo" || el.type === "image") {
-        return (el.src || "").toLowerCase().includes("drinkaware");
-      }
-      if (el.type === "sticker") {
-        return el.stickerId === "drinkaware";
-      }
-      return false;
-    });
-
+    const drinkawareLogo = elements.find(el => 
+      el.type === 'logo' && 
+      (el.src || '').toLowerCase().includes('drinkaware')
+    );
+    
     const logoHeight = drinkawareLogo?.height || 0;
     console.log(`  ↳ Drinkaware logo height: ${logoHeight}px`);
-
+    
     if (logoHeight < 20) {
       console.log(`  ⚠️ DRINKAWARE TOO SMALL! ${logoHeight}px < 20px`);
       violations.push({
         elementId: drinkawareLogo.id,
-        rule: "DRINKAWARE_SIZE",
-        severity: "hard",
-        message: "Drinkaware logo must be at least 20px tall",
+        rule: 'DRINKAWARE_SIZE',
+        severity: 'hard',
+        message: 'Drinkaware logo must be at least 20px tall',
         autoFixable: true,
         autoFix: {
-          property: "height",
-          value: 20,
-        },
+          property: 'height',
+          value: 20
+        }
       });
     }
   }
-
-  console.log(
-    `✅ checkDrinkawareLogo complete: ${violations.length} violations`
-  );
+  
+  console.log(`✅ checkDrinkawareLogo complete: ${violations.length} violations`);
   return violations;
 }
 
@@ -255,108 +170,99 @@ export function checkDrinkawareLogo(elements, isAlcohol = false) {
  * @returns {Promise<Array>} - Array of warning violations
  */
 export async function checkPeopleDetection(elements, options = {}) {
-  console.log("🔍 [VISUAL RULES] checkPeopleDetection called");
-
+  console.log('🔍 [VISUAL RULES] checkPeopleDetection called');
+  
   const { enableFaceDetection = true } = options;
-
+  
   if (!enableFaceDetection) {
-    console.log("  ↳ Face detection disabled, skipping");
+    console.log('  ↳ Face detection disabled, skipping');
     return [];
   }
-
+  
   const violations = [];
-
+  
   // Only check image elements
-  const imageElements = elements.filter((el) => el.type === "image");
+  const imageElements = elements.filter(el => el.type === 'image');
   console.log(`  ↳ Image elements to check: ${imageElements.length}`);
-
+  
   if (imageElements.length === 0) {
-    console.log("  ↳ No images to check");
+    console.log('  ↳ No images to check');
     return [];
   }
-
+  
   // Try to load face detection module dynamically
   let detectFaces;
   try {
-    console.log("📦 [VISUAL RULES] Loading face detection module...");
-    const faceModule = await import("../utils/faceDetection.js");
+    console.log('📦 [VISUAL RULES] Loading face detection module...');
+    const faceModule = await import('../utils/faceDetection.js');
     detectFaces = faceModule.detectFaces;
-    console.log("✅ [VISUAL RULES] Face detection module loaded");
+    console.log('✅ [VISUAL RULES] Face detection module loaded');
   } catch (loadError) {
-    console.error(
-      "❌ [VISUAL RULES] Failed to load face detection:",
-      loadError.message
-    );
-    console.warn("⚠️ [VISUAL RULES] Continuing without face detection");
+    console.error('❌ [VISUAL RULES] Failed to load face detection:', loadError.message);
+    console.warn('⚠️ [VISUAL RULES] Continuing without face detection');
     return violations; // Return empty, don't crash
   }
-
+  
   // Process each image element
   for (const el of imageElements) {
     console.log(`  🖼️ Checking image: ${el.id}`);
-
+    
     // Skip if no actual image data
     if (!el.src && !el.imageElement) {
       console.log(`    ↳ No image data, skipping`);
       continue;
     }
-
+    
     try {
       // Create image element from src if needed
       let imageToAnalyze = el.imageElement;
-
+      
       if (!imageToAnalyze && el.src) {
-        console.log(
-          `    ↳ Loading image from src: ${el.src.substring(0, 50)}...`
-        );
+        console.log(`    ↳ Loading image from src: ${el.src.substring(0, 50)}...`);
         // Create temporary image element
         imageToAnalyze = new Image();
-        imageToAnalyze.crossOrigin = "anonymous";
+        imageToAnalyze.crossOrigin = 'anonymous';
         const imgPromise = new Promise((resolve, reject) => {
           imageToAnalyze.onload = () => resolve();
           imageToAnalyze.onerror = reject;
           imageToAnalyze.src = el.src;
         });
-
+        
         // Wait for image to load (with timeout)
         await Promise.race([
           imgPromise,
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 5000)
-          ),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ]);
         console.log(`    ✅ Image loaded successfully`);
       }
-
+      
       if (!imageToAnalyze) {
         console.log(`    ↳ Could not load image`);
         continue;
       }
-
+      
       // Detect faces
       console.log(`    🔍 Running face detection...`);
       const result = await detectFaces(imageToAnalyze);
       const { faceCount, hasFaces, error } = result;
-
+      
       if (error) {
         console.warn(`    ⚠️ Detection error:`, error.message);
         continue;
       }
-
+      
       if (hasFaces) {
         console.log(`    ⚠️ PEOPLE DETECTED! Count: ${faceCount}`);
         violations.push({
           elementId: el.id,
-          rule: "PEOPLE_DETECTED",
-          severity: "warning",
-          message: `Detected ${faceCount} face${
-            faceCount > 1 ? "s" : ""
-          }. Ensure usage rights are secured.`,
+          rule: 'PEOPLE_DETECTED',
+          severity: 'warning',
+          message: `Detected ${faceCount} face${faceCount > 1 ? 's' : ''}. Ensure usage rights are secured.`,
           autoFixable: false,
           metadata: {
             faceCount,
-            imageId: el.id,
-          },
+            imageId: el.id
+          }
         });
       } else {
         console.log(`    ✅ No faces detected`);
@@ -367,9 +273,7 @@ export async function checkPeopleDetection(elements, options = {}) {
       continue;
     }
   }
-
-  console.log(
-    `✅ checkPeopleDetection complete: ${violations.length} warnings`
-  );
+  
+  console.log(`✅ checkPeopleDetection complete: ${violations.length} warnings`);
   return violations;
 }
