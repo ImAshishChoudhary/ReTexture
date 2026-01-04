@@ -11,18 +11,26 @@ interface Format {
 }
 
 const formats: Format[] = [
-  // Row 1 - Social
+  // Row 1 - Social Media
   { id: "1", name: "Instagram Post", width: 1080, height: 1080 },
   { id: "2", name: "Instagram Story", width: 1080, height: 1920 },
-  { id: "3", name: "Facebook", width: 1200, height: 630 },
-  // Row 2 - Display
-  { id: "4", name: "Banner", width: 1920, height: 600 },
-  { id: "5", name: "Leaderboard", width: 728, height: 90 },
-  { id: "6", name: "Rectangle", width: 300, height: 250 },
-  // Row 3 - Retail
-  { id: "7", name: "Shelf Talker", width: 1200, height: 400 },
-  { id: "8", name: "End Cap", width: 1080, height: 1920 },
-  { id: "9", name: "POS Card", width: 600, height: 800 },
+  { id: "3", name: "Facebook Post", width: 1200, height: 630 },
+  { id: "4", name: "Twitter/X Post", width: 1200, height: 675 },
+  // Row 2 - Video/YouTube
+  { id: "5", name: "YouTube Thumbnail", width: 1280, height: 720 },
+  { id: "6", name: "YouTube Banner", width: 2560, height: 1440 },
+  { id: "7", name: "16:9 Widescreen", width: 1920, height: 1080 },
+  { id: "8", name: "4:3 Standard", width: 1600, height: 1200 },
+  // Row 3 - Display Ads
+  { id: "9", name: "Leaderboard", width: 728, height: 90 },
+  { id: "10", name: "Rectangle", width: 300, height: 250 },
+  { id: "11", name: "Wide Skyscraper", width: 160, height: 600 },
+  { id: "12", name: "Large Banner", width: 1920, height: 600 },
+  // Row 4 - Retail/Print
+  { id: "13", name: "Shelf Talker", width: 1200, height: 400 },
+  { id: "14", name: "End Cap", width: 1080, height: 1920 },
+  { id: "15", name: "POS Card", width: 600, height: 800 },
+  { id: "16", name: "A4 Portrait", width: 2480, height: 3508 },
 ];
 
 interface FormatModalProps {
