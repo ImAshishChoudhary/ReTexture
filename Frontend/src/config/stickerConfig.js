@@ -40,9 +40,9 @@ export const STICKERS = [
     category: STICKER_CATEGORIES.TAGS,
     src: "/src/assets/stickers/available-at-tesco.png",
     description: "Standard Tesco brand tag",
-    defaultSize: { width: 350, height: 70 },
+    defaultSize: { width: 1000, height: 250 },
     minSize: { width: 200, height: 40 },
-    maxSize: { width: 500, height: 100 },
+    maxSize: { width: 375, height: 150 },
     compliance: {
       satisfiesRule: "MISSING_TAG",
       required: true,
@@ -61,9 +61,9 @@ export const STICKERS = [
     category: STICKER_CATEGORIES.TAGS,
     src: "/src/assets/stickers/only-at-tesco.png",
     description: "Exclusive product tag",
-    defaultSize: { width: 320, height: 70 },
-    minSize: { width: 180, height: 40 },
-    maxSize: { width: 480, height: 100 },
+    defaultSize: { width: 624, height: 250 },
+    minSize: { width: 200, height: 40 },
+    maxSize: { width: 750, height: 300 },
     compliance: {
       satisfiesRule: "MISSING_TAG",
       required: true,
@@ -130,6 +130,7 @@ export const getRequiredStickers = (options = {}) => {
 /**
  * Calculate optimal sticker size based on canvas dimensions
  * Maintains aspect ratio - no compression
+ * Target: 1000px width with max 10% of canvas width constraint
  */
 export const calculateStickerSize = (sticker, canvasSize) => {
   console.log("[SIZE_CALC] 📏 Calculating sticker size");
@@ -143,16 +144,19 @@ export const calculateStickerSize = (sticker, canvasSize) => {
   const aspectRatio = sticker.defaultSize.width / sticker.defaultSize.height;
   console.log(`[SIZE_CALC] Aspect ratio: ${aspectRatio.toFixed(2)}`);
 
-  // Use 35-40% of canvas width for prominent visibility (like user's resize)
-  const targetWidthPercent = 0.38; // 38% of canvas width
-  let width = w * targetWidthPercent;
+  // Target size: 10000px width, but respect canvas constraints
+  // Maximum allowed: 100% of canvas width (10x larger than before)
+  const maxAllowedWidth = w * 1.0; // 100% of canvas width
+  const targetWidth = 10000; // Desired 10000px width
+
+  console.log(`[SIZE_CALC] Target width: ${targetWidth}px`);
   console.log(
-    `[SIZE_CALC] Initial width (${(targetWidthPercent * 100).toFixed(
-      0
-    )}% of canvas): ${width.toFixed(0)}px`
+    `[SIZE_CALC] Max allowed (100% of canvas): ${maxAllowedWidth.toFixed(0)}px`
   );
 
-  // Scale width first
+  // Use smaller of targetWidth or maxAllowedWidth
+  let width = Math.min(targetWidth, maxAllowedWidth);
+  console.log(`[SIZE_CALC] Initial width: ${width.toFixed(0)}px`);
 
   // Clamp width to min/max
   width = Math.max(
@@ -182,9 +186,10 @@ export const calculateStickerSize = (sticker, canvasSize) => {
 
   console.log(`[SIZE_CALC] ✅ Final size:`, finalSize);
   console.log(
-    `[SIZE_CALC] Clamped: width=${width !== finalSize.width}, height=${
-      height !== finalSize.height
-    }`
+    `[SIZE_CALC] Final size as % of canvas width: ${(
+      (finalSize.width / w) *
+      100
+    ).toFixed(1)}%`
   );
 
   return finalSize;

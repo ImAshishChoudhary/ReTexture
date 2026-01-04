@@ -10,7 +10,8 @@ export const STICKER_CATEGORIES = {
   CLUBCARD: "clubcard",
 } as const;
 
-export type StickerCategory = (typeof STICKER_CATEGORIES)[keyof typeof STICKER_CATEGORIES];
+export type StickerCategory =
+  (typeof STICKER_CATEGORIES)[keyof typeof STICKER_CATEGORIES];
 
 export interface StickerSize {
   width: number;
@@ -74,9 +75,9 @@ export const STICKERS: StickerConfig[] = [
     category: STICKER_CATEGORIES.TAGS,
     src: "/stickers/available-at-tesco.png",
     description: "Standard Tesco brand tag",
-    defaultSize: { width: 350, height: 70 },
-    minSize: { width: 200, height: 40 },
-    maxSize: { width: 500, height: 100 },
+    defaultSize: { width: 5000, height: 2000 },
+    minSize: { width: 400, height: 300 },
+    maxSize: { width: 1500, height: 600 },
     compliance: {
       satisfiesRule: "MISSING_TAG",
       required: true,
@@ -95,9 +96,9 @@ export const STICKERS: StickerConfig[] = [
     category: STICKER_CATEGORIES.TAGS,
     src: "/stickers/only-at-tesco.png",
     description: "Exclusive product tag",
-    defaultSize: { width: 320, height: 70 },
-    minSize: { width: 180, height: 40 },
-    maxSize: { width: 480, height: 100 },
+    defaultSize: { width: 624, height: 350 },
+    minSize: { width: 200, height: 40 },
+    maxSize: { width: 750, height: 450 },
     compliance: {
       satisfiesRule: "MISSING_TAG",
       required: true,
@@ -180,7 +181,9 @@ export function getStickerById(id: string): StickerConfig | undefined {
   return STICKERS.find((s) => s.id === id);
 }
 
-export function getStickersByCategory(category: StickerCategory): StickerConfig[] {
+export function getStickersByCategory(
+  category: StickerCategory
+): StickerConfig[] {
   return STICKERS.filter((s) => s.category === category);
 }
 
@@ -202,11 +205,41 @@ export function calculateStickerSize(
   canvasWidth: number,
   canvasHeight: number
 ): StickerSize {
-  const scaleFactor = canvasWidth / 1080; // Base on 1080px width
-  
+  // Calculate aspect ratio of the sticker
+  const aspectRatio = sticker.defaultSize.width / sticker.defaultSize.height;
+
+  // Target size: 10000px width, but respect canvas constraints
+  // Maximum allowed: 100% of canvas width (10x larger than before)
+  const maxAllowedWidth = canvasWidth * 1.0; // 100% of canvas width
+  const targetWidth = 10000; // Your desired 10000px width
+
+  // Use smaller of targetWidth or maxAllowedWidth
+  let width = Math.min(targetWidth, maxAllowedWidth);
+
+  // Clamp width to sticker's min/max bounds
+  width = Math.max(
+    sticker.minSize.width,
+    Math.min(width, sticker.maxSize.width)
+  );
+
+  // Calculate height maintaining aspect ratio
+  let height = width / aspectRatio;
+
+  // If height exceeds max, scale down proportionally
+  if (height > sticker.maxSize.height) {
+    height = sticker.maxSize.height;
+    width = height * aspectRatio;
+  }
+
+  // If height is below min, scale up proportionally
+  if (height < sticker.minSize.height) {
+    height = sticker.minSize.height;
+    width = height * aspectRatio;
+  }
+
   return {
-    width: Math.round(sticker.defaultSize.width * scaleFactor),
-    height: Math.round(sticker.defaultSize.height * scaleFactor),
+    width: Math.round(width),
+    height: Math.round(height),
   };
 }
 
