@@ -354,12 +354,13 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
         img.save(img_byte_arr, format='PNG')
         product_bytes = img_byte_arr.getvalue()
     
-    # Initialize client
-    client = genai.Client(
-        vertexai=True,
-        project=PROJECT_ID,
-        location=LOCATION,
-    )
+    # Initialize client with API key (not Vertex AI)
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        print("[AI_SERVICE DEBUG] ❌ No GOOGLE_API_KEY found in environment")
+        return None
+    
+    client = genai.Client(api_key=api_key)
     
     # Style prompts
     style_prompts = {
@@ -403,6 +404,7 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
         Keep the product in the input image EXACTLY unchanged.
         Generate a new background: {style_prompt}
         High realism, commercial photography.
+        Output a square 1:1 aspect ratio image.
         """
         
         print(f"[AI_SERVICE DEBUG] Calling Gemini API for {style} style...")
@@ -418,7 +420,6 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
             ],
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE"],
-                image_config=types.ImageConfig(aspect_ratio="1:1"),
             ),
         )
         

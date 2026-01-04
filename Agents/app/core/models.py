@@ -40,14 +40,24 @@ class GenerationResponse(BaseModel):
 
 
 # Auto-Fix Models
+class AutoFixHint(BaseModel):
+    """Auto-fix hint from frontend validation"""
+    property: Optional[str] = None
+    value: Optional[Any] = None
+
+
 class ViolationInput(BaseModel):
     """Individual violation detected by frontend"""
+    
+    model_config = {"extra": "ignore"}  # Ignore extra fields from frontend
 
     elementId: Optional[str] = None
     rule: str
     severity: str  # "hard" or "warning"
     message: str
-    autoFixable: bool
+    autoFixable: bool = False
+    autoFix: Optional[AutoFixHint] = None  # Frontend may send fix hints
+    suggestion: Optional[str] = None  # Optional suggestion text
 
 
 class AutoFixRequest(BaseModel):
@@ -55,10 +65,20 @@ class AutoFixRequest(BaseModel):
 
     html: str
     css: str
-    images: Dict[str, str]  # {placeholder_id: base64_data_url}
+    images: Optional[Dict[str, str]] = None  # {placeholder_id: base64_data_url}
     violations: List[ViolationInput]
-    canvas_width: int = 1080
-    canvas_height: int = 1920
+    canvas_width: Optional[int] = None
+    canvas_height: Optional[int] = None
+    canvasWidth: Optional[int] = None  # Frontend sends camelCase
+    canvasHeight: Optional[int] = None  # Frontend sends camelCase
+    
+    @property
+    def width(self) -> int:
+        return self.canvas_width or self.canvasWidth or 1080
+    
+    @property
+    def height(self) -> int:
+        return self.canvas_height or self.canvasHeight or 1920
 
 
 class FixApplied(BaseModel):

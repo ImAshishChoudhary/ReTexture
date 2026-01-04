@@ -67,6 +67,11 @@ def init_agent():
 
 
 
+def is_agent_available():
+    """Check if validation agent is available"""
+    return _agent is not None
+
+
 def get_agent():
     if _agent is None:
         raise RuntimeError("Agent not initialized - check Google API credentials")
