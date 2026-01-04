@@ -1,2 +1,36 @@
-# HTML CSS (canvas Body) validation ruleset
-- add `1 px solid red` border to all possible objects!
+# Tesco Retail Media Canvas Validation Ruleset
+
+## REQUIRED ELEMENTS (HARD RULES)
+- Canvas MUST contain one Tesco branding element: either Tesco logo OR a Tesco badge/sticker (e.g., "Available at Tesco", "Only at Tesco")
+- If no Tesco branding found, mark as NON-COMPLIANT with suggestion to add Tesco logo or badge
+
+## TESCO BRANDING DETECTION
+Look for ANY of these indicators:
+- Image with filename containing "tesco", "logo", or src containing "Tesco_Logo"
+- SVG or image element with Tesco branding
+- Text element containing: "Available at Tesco", "Only at Tesco", "Tesco", "available at tesco"
+- Element with id/class containing "tesco", "brand-logo", "badge", "sticker"
+
+## LAYOUT RULES
+- Safe Zone Top (9:16 format): No critical elements in top 200px
+- Safe Zone Bottom (9:16 format): No interactive elements in bottom 250px
+- Headline must be visible and at least 24px font size
+- All text must meet WCAG contrast ratio of 4.5:1
+
+## BLOCKED CONTENT
+These words/phrases are NOT allowed:
+- "win", "prize", "competition"
+- "free delivery"
+- "50% off", "% off"
+- "t&c", "terms and conditions"
+- "guarantee", "guaranteed"
+- "clinically proven", "scientifically proven"
+
+## COMPLIANCE SCORING
+- Compliant: Has Tesco branding + no blocked content + meets layout rules
+- Non-Compliant: Missing Tesco branding OR has blocked content OR violates hard layout rules
+
+## OUTPUT REQUIREMENTS
+- Always check for Tesco branding presence
+- Report missing Tesco logo/badge as a critical issue
+- Suggest adding "Available at Tesco" badge if no branding found

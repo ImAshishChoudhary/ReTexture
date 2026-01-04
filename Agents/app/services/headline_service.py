@@ -57,17 +57,15 @@ def log_json(level: str, message: str, **data):
     logger.handle(record)
 
 
-# Configuration - USE VERTEX AI like existing ai_service.py
-PROJECT_ID = os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2")
-LOCATION = os.getenv("GCP_LOCATION", "us-central1")
+# Configuration - USE API KEY like existing ai_service.py
+API_KEY = os.getenv("GOOGLE_API_KEY", "")
 MODEL_ID = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash")
 
 log_json(
     "INFO",
     "🚀 Headline Service Initialized",
-    project_id=PROJECT_ID,
-    location=LOCATION,
     model=MODEL_ID,
+    has_api_key=bool(API_KEY),
 )
 
 
@@ -94,20 +92,18 @@ Avoid:
 
 
 def _init_gemini_client():
-    """Initialize Gemini client with Vertex AI (GCP project-based auth)"""
+    """Initialize Gemini client with API key"""
     log_json(
         "INFO",
-        "📦 Initializing Gemini client with Vertex AI...",
-        project=PROJECT_ID,
-        location=LOCATION,
+        "📦 Initializing Gemini client with API key...",
+        model=MODEL_ID,
     )
 
-    client = genai.Client(
-        vertexai=True,
-        project=PROJECT_ID,
-        location=LOCATION,
-    )
-    log_json("INFO", "✅ Gemini client initialized (Vertex AI)")
+    if not API_KEY:
+        raise ValueError("GOOGLE_API_KEY is not set in environment variables")
+
+    client = genai.Client(api_key=API_KEY)
+    log_json("INFO", "✅ Gemini client initialized (API Key)")
     return client
 
 

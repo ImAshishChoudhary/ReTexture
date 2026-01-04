@@ -207,7 +207,7 @@ async def prepare_html_for_llm(html: str, css: str) -> Tuple[str, str, Dict[str,
 
 
 async def restore_html_from_llm(
-    html: str, css: str, image_map: Dict[str, str]
+    html: str, css: str, image_map: Dict[str, str] = None
 ) -> Tuple[str, str]:
     """
     Restore base64 images after LLM processing.
@@ -215,11 +215,13 @@ async def restore_html_from_llm(
     Args:
         html: LLM-corrected HTML with placeholders
         css: LLM-corrected CSS with placeholders
-        image_map: Original image mapping
+        image_map: Original image mapping (can be None)
 
     Returns:
         (restored_html, restored_css)
     """
+    if not image_map:
+        return html, css
     manager = ImagePlaceholderManager()
     return manager.restore_base64_images(html, css, image_map)
 
