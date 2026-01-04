@@ -86,16 +86,37 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
   ]);
 
   const undo = useCallback(() => {
-    if (canUndo()) {
+    if (canUndo() && canvas) {
+      // Check if canvas context is still valid
+      try {
+        const ctx = canvas.getContext();
+        if (!ctx) {
+          console.warn("Canvas context is not available for undo");
+          return;
+        }
+      } catch (e) {
+        console.warn("Canvas may be disposed");
+        return;
+      }
+
       skipSave.current = true;
-      canvas?.clear().renderAll();
+      
+      // Safely clear canvas
+      try {
+        canvas.clear();
+        canvas.renderAll();
+      } catch (e) {
+        console.warn("Failed to clear canvas during undo:", e);
+        skipSave.current = false;
+        return;
+      }
 
       const previousIndex = historyIndex - 1;
       const previousState = JSON.parse(
         canvasHistory.current[previousIndex]
       );
 
-      canvas?.loadFromJSON(previousState, () => {
+      canvas.loadFromJSON(previousState, () => {
         canvas.renderAll();
         setHistoryIndex(previousIndex);
         skipSave.current = false;
@@ -104,16 +125,37 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
   }, [canUndo, canvas, historyIndex]);
 
   const redo = useCallback(() => {
-    if (canRedo()) {
+    if (canRedo() && canvas) {
+      // Check if canvas context is still valid
+      try {
+        const ctx = canvas.getContext();
+        if (!ctx) {
+          console.warn("Canvas context is not available for redo");
+          return;
+        }
+      } catch (e) {
+        console.warn("Canvas may be disposed");
+        return;
+      }
+
       skipSave.current = true;
-      canvas?.clear().renderAll();
+      
+      // Safely clear canvas
+      try {
+        canvas.clear();
+        canvas.renderAll();
+      } catch (e) {
+        console.warn("Failed to clear canvas during redo:", e);
+        skipSave.current = false;
+        return;
+      }
 
       const nextIndex = historyIndex + 1;
       const nextState = JSON.parse(
         canvasHistory.current[nextIndex]
       );
 
-      canvas?.loadFromJSON(nextState, () => {
+      canvas.loadFromJSON(nextState, () => {
         canvas.renderAll();
         setHistoryIndex(nextIndex);
         skipSave.current = false;
