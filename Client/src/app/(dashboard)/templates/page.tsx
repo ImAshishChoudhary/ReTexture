@@ -19,7 +19,7 @@ export default function TemplatesPage() {
     "This action cannot be undone."
   );
 
-  const { data, isLoading, isError } = useGetTemplates({ page: "1", limit: "20" });
+  const { data, isLoading, isError } = useGetTemplates();
 
   const handleTemplateClick = (template: ResponseType[0]) => {
     toast.loading("Creating design...");
