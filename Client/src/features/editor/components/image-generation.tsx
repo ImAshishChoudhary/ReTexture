@@ -15,7 +15,10 @@ import { toast } from "sonner";
 
 import { Editor } from "@/features/editor/types";
 import { useRemoveBackground } from "@/features/ai/api/use-remove-background";
-import { useGenerateVariations, type Variation } from "@/features/ai/api/use-variations";
+import {
+  useGenerateVariations,
+  type Variation,
+} from "@/features/ai/api/use-variations";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,6 +35,7 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
   const [removeBgEnabled, setRemoveBgEnabled] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [originalImage, setOriginalImage] = useState<fabric.Image | null>(null);
 
   // Remove background hook
   const removeBgMutation = useRemoveBackground({
@@ -44,17 +48,12 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
   });
 
   // Variations hook
-  const {
-    generateVariations,
-    isGenerating,
-    variations,
-    loadingStyles,
-    reset,
-  } = useGenerateVariations({
-    onComplete: () => {
-      toast.success("All variations generated!");
-    },
-  });
+  const { generateVariations, isGenerating, variations, loadingStyles, reset } =
+    useGenerateVariations({
+      onComplete: () => {
+        toast.success("All variations generated!");
+      },
+    });
 
   // Get image from canvas (with or without BG removal)
   const handlePrepareImage = useCallback(async () => {
@@ -69,13 +68,18 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
       return;
     }
 
+    // Store reference to the original image so we can remove it later
+    setOriginalImage(activeObject as fabric.Image);
+
     setIsProcessing(true);
     reset();
     setImageData(null);
     setPreviewUrl(null);
 
     try {
-      const imageElement = (activeObject as fabric.Image).getElement() as HTMLImageElement;
+      const imageElement = (
+        activeObject as fabric.Image
+      ).getElement() as HTMLImageElement;
       const canvas = document.createElement("canvas");
       canvas.width = imageElement.naturalWidth || imageElement.width;
       canvas.height = imageElement.naturalHeight || imageElement.height;
@@ -116,109 +120,151 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
   }, [imageData, concept, generateVariations]);
 
   // Apply variation to canvas - properly covering the workspace
-  const handleApplyVariation = useCallback((variation: Variation) => {
-    if (!editor?.canvas) return;
+  const handleApplyVariation = useCallback(
+    (variation: Variation) => {
+      if (!editor?.canvas) return;
 
-    const currentCanvas = editor.canvas;
-    
-    // Check if canvas context is valid
-    try {
-      const ctx = currentCanvas.getContext();
-      if (!ctx) {
-        console.warn("Canvas context not available");
-        toast.error("Canvas not ready. Please try again.");
+      const currentCanvas = editor.canvas;
+
+      // Check if canvas context is valid
+      try {
+        const ctx = currentCanvas.getContext();
+        if (!ctx) {
+          console.warn("Canvas context not available");
+          toast.error("Canvas not ready. Please try again.");
+          return;
+        }
+      } catch (e) {
+        console.warn("Canvas may be disposed");
         return;
       }
-    } catch (e) {
-      console.warn("Canvas may be disposed");
-      return;
-    }
 
-    // Get workspace (the clip area)
-    const workspace = currentCanvas.getObjects().find(obj => obj.name === "clip");
-    if (!workspace) {
-      toast.error("Canvas workspace not found");
-      return;
-    }
-
-    const workspaceWidth = workspace.width || 800;
-    const workspaceHeight = workspace.height || 600;
-    const workspaceLeft = workspace.left || 0;
-    const workspaceTop = workspace.top || 0;
-
-    // Remove any previously applied AI background images
-    const objects = currentCanvas.getObjects();
-    const aiBackgrounds = objects.filter(
-      (obj) => (obj as any).customId === "ai-variation-background"
-    );
-    aiBackgrounds.forEach(obj => {
-      try {
-        currentCanvas.remove(obj);
-      } catch (e) {
-        // Ignore removal errors
+      // Get workspace (the clip area)
+      const workspace = currentCanvas
+        .getObjects()
+        .find((obj) => obj.name === "clip");
+      if (!workspace) {
+        toast.error("Canvas workspace not found");
+        return;
       }
-    });
 
-    // Load and add the variation image to cover the workspace
-    fabric.Image.fromURL(
-      variation.url,
-      (img) => {
-        if (!currentCanvas || !currentCanvas.getContext()) return;
+      const workspaceWidth = workspace.width || 800;
+      const workspaceHeight = workspace.height || 600;
+      const workspaceLeft = workspace.left || 0;
+      const workspaceTop = workspace.top || 0;
 
-        // Calculate scale to COVER the workspace (like CSS object-fit: cover)
-        const imgWidth = img.width || 1;
-        const imgHeight = img.height || 1;
-        
-        const scaleX = workspaceWidth / imgWidth;
-        const scaleY = workspaceHeight / imgHeight;
-        
-        // Use the larger scale to ensure full coverage
-        const scale = Math.max(scaleX, scaleY);
-        
-        // Calculate position to center the image within workspace
-        const scaledWidth = imgWidth * scale;
-        const scaledHeight = imgHeight * scale;
-        
-        // Center the image over the workspace
-        const offsetX = (workspaceWidth - scaledWidth) / 2;
-        const offsetY = (workspaceHeight - scaledHeight) / 2;
+      // Remove any previously applied AI background images - get fresh object list
+      const objectsToCheck = currentCanvas.getObjects();
+      const aiBackgrounds = objectsToCheck.filter(
+        (obj) => (obj as any).customId === "ai-variation-background"
+      );
 
-        img.set({
-          left: workspaceLeft + offsetX,
-          top: workspaceTop + offsetY,
-          scaleX: scale,
-          scaleY: scale,
-          selectable: true,
-          hasControls: true,
-          hasBorders: true,
-          originX: "left",
-          originY: "top",
-        });
+      console.log("Found AI backgrounds to remove:", aiBackgrounds.length);
 
-        // Mark as AI-generated background
-        (img as any).customId = "ai-variation-background";
-
+      aiBackgrounds.forEach((obj) => {
         try {
-          // Add image and send to back (but above workspace)
-          currentCanvas.add(img);
-          
-          // Move image just above the workspace
-          const workspaceIndex = objects.indexOf(workspace);
-          if (workspaceIndex >= 0) {
-            currentCanvas.moveTo(img, workspaceIndex + 1);
-          }
-          
-          currentCanvas.setActiveObject(img);
-          currentCanvas.renderAll();
-          toast.success(`Applied ${variation.name} background!`);
+          currentCanvas.remove(obj);
+          console.log("Removed AI background:", obj);
         } catch (e) {
-          console.warn("Failed to apply variation:", e);
-          toast.error("Failed to apply variation");
+          console.error("Error removing AI background:", e);
         }
-      },
-      { crossOrigin: "anonymous" }
-    );
-  }, [editor]);
+      });
+
+      // Remove the original image that was selected for variation generation
+      if (originalImage) {
+        try {
+          // Check if the original image still exists in canvas
+          const stillExists = currentCanvas
+            .getObjects()
+            .includes(originalImage);
+          if (stillExists) {
+            currentCanvas.remove(originalImage);
+            console.log("Removed original image");
+          }
+          setOriginalImage(null);
+        } catch (e) {
+          console.warn("Could not remove original image:", e);
+        }
+      }
+
+      // Force canvas to re-render after removals
+      currentCanvas.discardActiveObject();
+      currentCanvas.requestRenderAll();
+
+      // Load and add the variation image to cover the workspace
+      fabric.Image.fromURL(
+        variation.url,
+        (img) => {
+          if (!currentCanvas || !currentCanvas.getContext()) return;
+
+          // Calculate scale to COVER the workspace (like CSS object-fit: cover)
+          const imgWidth = img.width || 1;
+          const imgHeight = img.height || 1;
+
+          const scaleX = workspaceWidth / imgWidth;
+          const scaleY = workspaceHeight / imgHeight;
+
+          // Use the larger scale to ensure full coverage
+          const scale = Math.max(scaleX, scaleY);
+
+          // Calculate position to center the image within workspace
+          const scaledWidth = imgWidth * scale;
+          const scaledHeight = imgHeight * scale;
+
+          // Center the image over the workspace
+          const offsetX = (workspaceWidth - scaledWidth) / 2;
+          const offsetY = (workspaceHeight - scaledHeight) / 2;
+
+          img.set({
+            left: workspaceLeft + offsetX,
+            top: workspaceTop + offsetY,
+            scaleX: scale,
+            scaleY: scale,
+            selectable: true,
+            hasControls: true,
+            hasBorders: true,
+            originX: "left",
+            originY: "top",
+          });
+
+          // Mark as AI-generated background
+          (img as any).customId = "ai-variation-background";
+
+          console.log(
+            "Adding new variation with customId:",
+            (img as any).customId
+          );
+
+          try {
+            // Add image and send to back (but above workspace)
+            currentCanvas.add(img);
+
+            // Get fresh workspace reference and objects list
+            const currentObjects = currentCanvas.getObjects();
+            const workspaceObj = currentObjects.find(
+              (obj) => obj.name === "clip"
+            );
+
+            if (workspaceObj) {
+              const workspaceIndex = currentObjects.indexOf(workspaceObj);
+              if (workspaceIndex >= 0) {
+                currentCanvas.moveTo(img, workspaceIndex + 1);
+              }
+            }
+
+            currentCanvas.setActiveObject(img);
+            currentCanvas.renderAll();
+            toast.success(`Applied ${variation.name} background!`);
+          } catch (e) {
+            console.warn("Failed to apply variation:", e);
+            toast.error("Failed to apply variation");
+          }
+        },
+        { crossOrigin: "anonymous" }
+      );
+    },
+    [editor, originalImage]
+  );
 
   const isLoading = removeBgMutation.isPending || isProcessing;
 
@@ -228,6 +274,7 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
     setImageData(null);
     setPreviewUrl(null);
     setConcept("");
+    setOriginalImage(null);
   }, [reset]);
 
   return (
@@ -235,16 +282,20 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
       {/* Header */}
       <div className="flex items-center gap-2 pb-2 border-b border-white/10">
         <Wand2 className="w-4 h-4 text-orange-400" />
-        <span className="text-sm font-medium text-white">AI Background Generator</span>
+        <span className="text-sm font-medium text-white">
+          AI Background Generator
+        </span>
       </div>
 
       {/* Step 1: Select Image & Options */}
       <div className="space-y-3">
         <h4 className="text-xs font-medium text-neutral-400 flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">1</span>
+          <span className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">
+            1
+          </span>
           Prepare Image
         </h4>
-        
+
         {/* Remove BG Toggle */}
         <div className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/10">
           <div className="flex items-center gap-2">
@@ -306,7 +357,9 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
       {/* Step 2: Theme */}
       <div className="space-y-2">
         <h4 className="text-xs font-medium text-neutral-400 flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">2</span>
+          <span className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">
+            2
+          </span>
           Theme (optional)
         </h4>
         <Input
@@ -321,7 +374,9 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
       {/* Step 3: Generate */}
       <div className="space-y-2">
         <h4 className="text-xs font-medium text-neutral-400 flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">3</span>
+          <span className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold">
+            3
+          </span>
           Generate Variations
         </h4>
         <Button
@@ -346,7 +401,9 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
       {/* Variations Gallery */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-medium text-neutral-400">Generated Variations</h4>
+          <h4 className="text-xs font-medium text-neutral-400">
+            Generated Variations
+          </h4>
           {(variations.length > 0 || imageData) && (
             <button
               onClick={handleReset}
@@ -368,7 +425,9 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
                 <Sparkles className="w-5 h-5 mx-auto mb-2 opacity-50" />
                 <p className="text-xs">No variations yet</p>
                 <p className="text-[10px] mt-1 text-neutral-600">
-                  {imageData ? "Click Generate to create variations" : "Prepare an image first"}
+                  {imageData
+                    ? "Click Generate to create variations"
+                    : "Prepare an image first"}
                 </p>
               </div>
             </div>
@@ -388,9 +447,13 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
                     className="w-full aspect-square object-cover"
                   />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-[10px] text-white font-medium px-2 py-1 bg-orange-500 rounded">Apply</span>
+                    <span className="text-[10px] text-white font-medium px-2 py-1 bg-orange-500 rounded">
+                      Apply
+                    </span>
                   </div>
-                  <p className="text-[10px] text-center text-neutral-400 mt-1 truncate">{v.name}</p>
+                  <p className="text-[10px] text-center text-neutral-400 mt-1 truncate">
+                    {v.name}
+                  </p>
                 </button>
               ))}
 
@@ -436,8 +499,9 @@ export const ImageGeneration = ({ editor }: ImageGenerationProps) => {
       {/* Info */}
       <div className="p-2 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/20 rounded-lg">
         <p className="text-[10px] text-neutral-400">
-          💡 <span className="text-orange-400">AI generates 3 styles:</span> Studio, Lifestyle, Creative.
-          Toggle &ldquo;Remove Background&rdquo; for product isolation.
+          💡 <span className="text-orange-400">AI generates 3 styles:</span>{" "}
+          Studio, Lifestyle, Creative. Toggle &ldquo;Remove Background&rdquo;
+          for product isolation.
         </p>
       </div>
     </div>

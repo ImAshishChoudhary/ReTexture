@@ -53,9 +53,9 @@ export const STICKERS: StickerConfig[] = [
     category: STICKER_CATEGORIES.LEGAL,
     src: "/stickers/drinkaware-logo.png",
     description: "Required for all alcohol-related campaigns",
-    defaultSize: { width: 80, height: 60 },
-    minSize: { width: 40, height: 30 },
-    maxSize: { width: 150, height: 112 },
+    defaultSize: { width: 1000, height: 107 },
+    minSize: { width: 150, height: 16 },
+    maxSize: { width: 500, height: 54 },
     compliance: {
       satisfiesRule: "MISSING_DRINKAWARE",
       required: "alcohol",
