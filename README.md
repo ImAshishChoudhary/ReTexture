@@ -1,4 +1,4 @@
-# ReTexture - AI-Powered Retail Media Compliance Platform
+# ReTexture - AI Powered Retail Media Compliance Platform
 
 **The Problem**
 
@@ -43,6 +43,12 @@ ReTexture democratizes retail media creation for SMBs while eliminating complian
 
 ---
 
+
+## Architecture Diagram
+
+![ReTexture Architecture](./Client/public/architecture.jpg)
+
+---
 
 ## 🛠️ Tech Stack
 
@@ -212,7 +218,7 @@ Canvas serialization respects format-aware safe zones (9:16 vs 1:1 aspect ratios
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
----
+
 
 ## 👥 Contributors
 
