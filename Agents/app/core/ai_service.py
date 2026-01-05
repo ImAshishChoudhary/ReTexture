@@ -8,7 +8,11 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
-load_dotenv()
+# Load .env from the Agents directory (parent of app/core)
+env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+print(f"[AI_SERVICE] Loading .env from: {env_path}")
+print(f"[AI_SERVICE] GOOGLE_API_KEY loaded: {'Yes' if os.getenv('GOOGLE_API_KEY') else 'No'}")
 
 # Get GCP credentials from environment variables
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2")

@@ -147,9 +147,16 @@
         "case_insensitive": true,
         "minimum_occurrences": 1
       },
-      "fix_instruction": "If no Tesco branding text found, add a new text element with content 'Available at Tesco' positioned at bottom-left of canvas (x=20, y=canvas_height-280), fontSize=20, color=#FFFFFF, fontFamily='Tesco Modern'.",
+      "fix_instruction": "Add a BIG Tesco sticker at HARDCODED position: left=30px, top=1570px (bottom-left), with width=280px, height=80px, text='Available at Tesco', fontSize=24px, fontWeight=bold, backgroundColor=white, color=Tesco blue (#00539F).",
       "example_violation": "No Tesco branding text detected",
-      "example_fix": "Add text element: 'Available at Tesco' at (20, 1640)"
+      "example_fix": "Add sticker: 'Available at Tesco' at (30, 1570) with size 280x80px",
+      "hardcoded_position": {
+        "left": 30,
+        "top": 1570,
+        "width": 280,
+        "height": 80,
+        "fontSize": 24
+      }
     },
     {
       "id": "HEADLINE_REQUIRED",
@@ -163,9 +170,79 @@
         "min_font_size_px": 24,
         "minimum_occurrences": 1
       },
-      "fix_instruction": "If no headline element exists, add a new headline with placeholder text 'Your Message Here' positioned at (40, 300), fontSize=32, fontWeight=bold, color=#FFFFFF, fontFamily='Tesco Modern'. Recommend manual editing for final copy.",
+      "fix_instruction": "Add headline at HARDCODED position: left=40px, top=220px (below safe zone), width=1000px. fontSize=48px, fontWeight=bold, color=#FFFFFF, textShadow='2px 2px 4px rgba(0,0,0,0.5)'. IMPORTANT: Generate AI-powered creative headline based on product (e.g., 'Nano Banana Bliss', 'Fresh & Fruity') - DO NOT use placeholder text!",
       "example_violation": "No headline element found in canvas",
-      "example_fix": "Add headline: 'Your Message Here' at (40, 300), fontSize=32"
+      "example_fix": "Add AI-generated headline at (40, 220), fontSize=48px",
+      "hardcoded_position": {
+        "left": 40,
+        "top": 220,
+        "width": 1000,
+        "fontSize": 48,
+        "fontWeight": "bold",
+        "color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "SUBHEAD_REQUIRED",
+      "category": "content",
+      "severity": "warning",
+      "autoFixable": true,
+      "name": "Subheadline Presence",
+      "description": "Creatives should have a subheadline to support the main headline message",
+      "constraint": {
+        "required_element_types": ["subheadline", "h2", "tagline"],
+        "min_font_size_px": 18,
+        "minimum_occurrences": 1
+      },
+      "fix_instruction": "Add subheadline at HARDCODED position: left=40px, top=300px (below headline), width=1000px. fontSize=24px, fontWeight=normal, color=#FFFFFF, textShadow='1px 1px 3px rgba(0,0,0,0.4)'. IMPORTANT: Generate AI-powered subheadline based on product - DO NOT use placeholder text!",
+      "example_violation": "No subheadline element found in canvas",
+      "example_fix": "Add AI-generated subheadline at (40, 300), fontSize=24px",
+      "hardcoded_position": {
+        "left": 40,
+        "top": 300,
+        "width": 1000,
+        "fontSize": 24,
+        "fontWeight": "normal",
+        "color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "BRAND_LOGO_REQUIRED",
+      "category": "branding",
+      "severity": "warning",
+      "autoFixable": true,
+      "name": "Brand Logo Presence",
+      "description": "All banners should have a brand logo. If no brand logo, add Tesco logo at right side",
+      "constraint": {
+        "required_element_types": ["logo", "brand-logo"],
+        "minimum_occurrences": 1
+      },
+      "fix_instruction": "If no brand logo found, add Tesco logo at HARDCODED position: left=900px (RIGHT SIDE), top=1570px, width=150px, height=60px. Use tesco-logo.png image.",
+      "example_violation": "No brand logo found in canvas",
+      "example_fix": "Add Tesco logo at right side (900, 1570), size 150x60px",
+      "hardcoded_position": {
+        "left": 900,
+        "top": 1570,
+        "width": 150,
+        "height": 60,
+        "position": "bottom-right"
+      }
+    },
+    {
+      "id": "STICKER_MIN_SIZE",
+      "category": "layout",
+      "severity": "warning",
+      "autoFixable": true,
+      "name": "Sticker Minimum Size",
+      "description": "All stickers (Tesco tags, value tiles) must be large enough to be clearly visible",
+      "constraint": {
+        "tesco_sticker_min_width": 280,
+        "tesco_sticker_min_height": 80,
+        "value_tile_min_size": 160
+      },
+      "fix_instruction": "Resize stickers to minimum sizes: Tesco sticker=280x80px, Value tiles=160x160px. Position Tesco sticker at (30, 1570), Value tile at (880, 220).",
+      "example_violation": "Tesco sticker too small at 100x30px",
+      "example_fix": "Resize Tesco sticker to 280x80px at position (30, 1570)"
     },
     {
       "id": "ELEMENT_COLLISION",
@@ -179,16 +256,21 @@
         "max_overlap_percentage": 25,
         "collision_detection": "bounding_box"
       },
-      "fix_instruction": "If two protected elements overlap >25%: 1) Calculate overlap area, 2) Move the smaller element away from larger element by shifting on axis with largest overlap, 3) Maintain minimum 10px spacing, 4) Prefer vertical shifts over horizontal to preserve layout flow.",
-      "example_violation": "Logo overlaps headline by 40% (120px² of 300px²)",
-      "example_fix": "Shift logo down by 50px to reduce overlap to 5%"
+      "fix_instruction": "Use HARDCODED non-overlapping positions: Headline at (40, 220), Subheadline at (40, 300), Product in center (y: 400-1520), Tesco sticker at (30, 1570), Brand logo at (900, 1570). These positions ensure NO OVERLAP. Product safe zone: y=400 to y=1520 - text/stickers must NOT be placed in this zone.",
+      "example_violation": "Logo overlaps headline by 40%",
+      "example_fix": "Move elements to hardcoded positions to ensure no overlap",
+      "hardcoded_safe_zones": {
+        "headline_zone": {"top": 200, "bottom": 380},
+        "product_zone": {"top": 400, "bottom": 1520},
+        "sticker_zone": {"top": 1520, "bottom": 1700}
+      }
     }
   ],
   "meta": {
-    "total_rules": 10,
-    "hard_failures": 7,
-    "warnings": 3,
-    "auto_fixable": 9,
+    "total_rules": 14,
+    "hard_failures": 8,
+    "warnings": 6,
+    "auto_fixable": 13,
     "categories": [
       "layout",
       "typography",

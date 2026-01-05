@@ -8,7 +8,6 @@ import {
   Shapes,
   Type,
   Sparkles,
-  ShieldCheck,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -26,7 +25,6 @@ const tools = [
   { id: "shapes" as ActiveTool, icon: Shapes, label: "Shapes" },
   { id: "draw" as ActiveTool, icon: Pencil, label: "Draw" },
   { id: "ai" as ActiveTool, icon: Sparkles, label: "AI" },
-  { id: "compliance" as ActiveTool, icon: ShieldCheck, label: "Compliance" },
 ];
 
 export const Sidebar = ({ activeTool, onChangeActiveTool }: SidebarProps) => {

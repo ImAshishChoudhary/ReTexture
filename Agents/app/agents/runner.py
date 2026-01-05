@@ -79,6 +79,67 @@ VALUE_TILE_TYPES = ["new", "white", "clubcard"]
 CTA_KEYWORDS = ["shop now", "buy now", "click here", "learn more", "find out more", "order now", "get it now"]
 
 
+# ==================== HARDCODED POSITIONS CALCULATOR ====================
+
+def get_hardcoded_positions(canvas_width: int, canvas_height: int) -> dict:
+    """
+    Calculate HARDCODED positions for all elements based on canvas dimensions.
+    These positions ensure NO OVERLAP between elements.
+    """
+    # Padding from edges
+    EDGE_PADDING = 20
+    
+    # Calculate positions based on canvas size
+    positions = {
+        # HEADLINE - Top left area (below any safe zone)
+        "headline": {
+            "left": EDGE_PADDING,
+            "top": EDGE_PADDING,
+            "width": int(canvas_width * 0.6),  # 60% of canvas width
+            "fontSize": max(36, int(canvas_height * 0.05)),  # 5% of height, min 36
+            "fontWeight": "bold",
+            "color": "#000000",
+            "textAlign": "left",
+            "fontFamily": "Arial, sans-serif"
+        },
+        # SUBHEADLINE - Below headline
+        "subheadline": {
+            "left": EDGE_PADDING,
+            "top": EDGE_PADDING + int(canvas_height * 0.08),  # Below headline
+            "width": int(canvas_width * 0.6),
+            "fontSize": max(22, int(canvas_height * 0.035)),  # 3.5% of height, min 22
+            "fontWeight": "normal",
+            "color": "#000000",
+            "textAlign": "left",
+            "fontFamily": "Arial, sans-serif"
+        },
+        # TESCO STICKER - Bottom left, BIG SIZE
+        "tesco_sticker": {
+            "left": EDGE_PADDING,
+            "top": canvas_height - 120,  # Near bottom
+            "width": max(200, int(canvas_width * 0.25)),  # 25% of width, min 200px
+            "height": max(80, int(canvas_height * 0.12)),  # 12% of height, min 80px
+        },
+        # BRAND LOGO / TESCO LOGO - RIGHT SIDE, bottom area
+        "brand_logo": {
+            "left": canvas_width - 120,  # Right side
+            "top": EDGE_PADDING,  # Top right corner
+            "width": 100,
+            "height": 40,
+            "position": "top-right"
+        },
+        # VALUE TILE - Top right area (if present)
+        "value_tile": {
+            "left": canvas_width - 140,
+            "top": canvas_height - 140,
+            "width": max(120, int(canvas_width * 0.12)),
+            "height": max(120, int(canvas_height * 0.15)),
+        }
+    }
+    
+    return positions
+
+
 # ==================== HELPER FUNCTIONS ====================
 
 def hex_to_rgb(hex_color: str) -> tuple:
@@ -176,7 +237,7 @@ def parse_fabric_canvas(canvas_json: str) -> dict:
 
 # ==================== ALL 20 TESCO VALIDATION RULES ====================
 
-def check_tesco_tag(objects: list) -> list:
+def check_tesco_tag(objects: list, canvas_width: int = 1080, canvas_height: int = 1920) -> list:
     """
     Rule 1: TESCO_TAG - Mandatory Tesco branding
     If creative links to Tesco, a Tesco tag is mandatory
@@ -211,22 +272,39 @@ def check_tesco_tag(objects: list) -> list:
     )
     
     if not (has_text_tag or has_logo or has_sticker or has_custom_tag):
+        # Get HARDCODED positions based on canvas size
+        positions = get_hardcoded_positions(canvas_width, canvas_height)
+        sticker_pos = positions["tesco_sticker"]
+        
         violations.append({
             "elementId": None,
             "rule": "TESCO_TAG",
             "severity": "hard",
             "message": "Missing required Tesco tag ('Available at Tesco' or 'Only at Tesco') or Tesco logo",
             "autoFixable": True,
-            "autoFix": {"action": "add_sticker", "sticker": "available_at_tesco"}
+            "autoFix": {
+                "action": "add_sticker",
+                "sticker": "available_at_tesco",
+                # HARDCODED position - bottom left, BIG SIZE (scaled to canvas)
+                "left": sticker_pos["left"],
+                "top": sticker_pos["top"],
+                "width": sticker_pos["width"],
+                "height": sticker_pos["height"],
+                "fontSize": 24,
+                "text": "Available at Tesco",
+                "scaleX": sticker_pos["width"] / 100,  # Scale factor for frontend
+                "scaleY": sticker_pos["height"] / 50
+            }
         })
     
     return violations
 
 
-def check_headline(objects: list) -> list:
+def check_headline(objects: list, canvas_width: int = 1080, canvas_height: int = 1920) -> list:
     """
     Rule 2: HEADLINE - Must have headline text
     Headline appears on all banners, minimum 24px
+    AI should generate creative headline based on product - NOT placeholder text!
     """
     violations = []
     text_elements = [o for o in objects if o.get('type') in ['text', 'textbox', 'i-text']]
@@ -242,21 +320,47 @@ def check_headline(objects: list) -> list:
             break
     
     if not has_headline:
+        # Get HARDCODED positions based on canvas size
+        positions = get_hardcoded_positions(canvas_width, canvas_height)
+        headline_pos = positions["headline"]
+        
         violations.append({
             "elementId": None,
             "rule": "HEADLINE",
             "severity": "hard",
             "message": f"Missing headline text (minimum {HEADLINE_MIN_FONT_SIZE}px font size required)",
             "autoFixable": True,
-            "autoFix": {"action": "add_element", "type": "headline", "fontSize": HEADLINE_MIN_FONT_SIZE}
+            "autoFix": {
+                "action": "add_element",
+                "type": "headline",
+                # HARDCODED position - top left area (scaled to canvas)
+                "left": headline_pos["left"],
+                "top": headline_pos["top"],
+                "width": headline_pos["width"],
+                "fontSize": headline_pos["fontSize"],
+                "fontWeight": headline_pos["fontWeight"],
+                "color": headline_pos["color"],
+                "textAlign": headline_pos["textAlign"],
+                "fontFamily": headline_pos["fontFamily"],
+                # AI GENERATION - DO NOT USE PLACEHOLDER!
+                "generateText": True,
+                "textType": "headline",
+                "suggestedTexts": [
+                    "Fresh & Delicious",
+                    "Quality You Trust",
+                    "Taste the Difference",
+                    "Simply Better"
+                ]
+            }
         })
     
     return violations
 
 
-def check_subhead(objects: list) -> list:
+def check_subhead(objects: list, canvas_width: int = 1080, canvas_height: int = 1920) -> list:
     """
     Rule 3: SUBHEAD - Subhead appears on all banners
+    AI should generate creative subheadline - NOT placeholder text!
     """
     violations = []
     text_elements = [o for o in objects if o.get('type') in ['text', 'textbox', 'i-text']]
@@ -269,13 +373,38 @@ def check_subhead(objects: list) -> list:
             non_tag_texts.append(el)
     
     if len(non_tag_texts) < 2:
+        # Get HARDCODED positions based on canvas size
+        positions = get_hardcoded_positions(canvas_width, canvas_height)
+        subhead_pos = positions["subheadline"]
+        
         violations.append({
             "elementId": None,
             "rule": "SUBHEAD",
             "severity": "warning",
             "message": "Consider adding a subhead text for better communication",
             "autoFixable": True,
-            "autoFix": {"action": "add_element", "type": "subhead", "fontSize": 18}
+            "autoFix": {
+                "action": "add_element",
+                "type": "subhead",
+                # HARDCODED position - below headline (scaled to canvas)
+                "left": subhead_pos["left"],
+                "top": subhead_pos["top"],
+                "width": subhead_pos["width"],
+                "fontSize": subhead_pos["fontSize"],
+                "fontWeight": subhead_pos["fontWeight"],
+                "color": subhead_pos["color"],
+                "textAlign": subhead_pos["textAlign"],
+                "fontFamily": subhead_pos["fontFamily"],
+                # AI GENERATION - DO NOT USE PLACEHOLDER!
+                "generateText": True,
+                "textType": "subhead",
+                "suggestedTexts": [
+                    "Quality you can trust",
+                    "Fresh from farm to table",
+                    "Made with the finest ingredients",
+                    "Perfect for the whole family"
+                ]
+            }
         })
     
     return violations
@@ -532,12 +661,21 @@ def check_packshot_safe_zone(objects: list) -> list:
     return violations
 
 
-def check_value_tile(objects: list) -> list:
+def check_value_tile(objects: list, canvas_width: int = 1080, canvas_height: int = 1920) -> list:
     """
     Rule 11: VALUE_TILE - Value tile rules
     Types: New, White, Clubcard - Nothing may overlap the value tile
+    Value tiles must be BIG (minimum 120x120px)
     """
     violations = []
+    
+    # Get HARDCODED positions based on canvas size
+    positions = get_hardcoded_positions(canvas_width, canvas_height)
+    value_tile_pos = positions["value_tile"]
+    
+    # HARDCODED minimum sizes for value tiles (scaled to canvas)
+    MIN_VALUE_TILE_WIDTH = value_tile_pos["width"]
+    MIN_VALUE_TILE_HEIGHT = value_tile_pos["height"]
     
     # Find value tiles by name or custom property
     value_tiles = []
@@ -545,6 +683,28 @@ def check_value_tile(objects: list) -> list:
         name = (el.get('name') or el.get('id') or '').lower()
         if any(vt in name for vt in ['value_tile', 'valuetile', 'price_tile', 'clubcard_tile', 'new_tile']):
             value_tiles.append(el)
+    
+    # Check value tile sizes
+    for tile in value_tiles:
+        tile_width = tile.get('width', 0) * tile.get('scaleX', 1)
+        tile_height = tile.get('height', 0) * tile.get('scaleY', 1)
+        
+        if tile_width < MIN_VALUE_TILE_WIDTH or tile_height < MIN_VALUE_TILE_HEIGHT:
+            violations.append({
+                "elementId": tile.get('id'),
+                "rule": "VALUE_TILE_SIZE",
+                "severity": "warning",
+                "message": f"Value tile too small ({tile_width:.0f}x{tile_height:.0f}px). Minimum size: {MIN_VALUE_TILE_WIDTH}x{MIN_VALUE_TILE_HEIGHT}px",
+                "autoFixable": True,
+                "autoFix": {
+                    "action": "resize",
+                    "width": MIN_VALUE_TILE_WIDTH,
+                    "height": MIN_VALUE_TILE_HEIGHT,
+                    # HARDCODED position for value tiles (scaled to canvas)
+                    "left": value_tile_pos["left"],
+                    "top": value_tile_pos["top"]
+                }
+            })
     
     # Check for overlap with value tiles
     for tile in value_tiles:
@@ -562,7 +722,12 @@ def check_value_tile(objects: list) -> list:
                     "severity": "hard",
                     "message": "Element overlaps value tile - nothing may overlap the value tile",
                     "autoFixable": True,
-                    "autoFix": {"action": "move_away", "from": tile.get('id')}
+                    "autoFix": {
+                        "action": "move_away",
+                        "from": tile.get('id'),
+                        # Move conflicting element to safe position
+                        "suggestedTop": int(canvas_height * 0.25)  # Below headline area
+                    }
                 })
     
     return violations
@@ -684,10 +849,11 @@ def check_drinkaware(objects: list, background: str) -> list:
     return violations
 
 
-def check_logo_presence(objects: list) -> list:
+def check_logo_presence(objects: list, canvas_width: int = 1080, canvas_height: int = 1920) -> list:
     """
     Rule 14: LOGO - Logo appears on all banners
     Can be uploaded or from brand library
+    When missing: ADD TESCO LOGO at RIGHT SIDE (TOP-RIGHT corner)
     """
     violations = []
     image_elements = [o for o in objects if o.get('type') == 'image']
@@ -708,13 +874,33 @@ def check_logo_presence(objects: list) -> list:
     has_logo = has_logo_image or has_custom_logo
     
     if not has_logo:
+        # Get HARDCODED positions based on canvas size
+        positions = get_hardcoded_positions(canvas_width, canvas_height)
+        logo_pos = positions["brand_logo"]
+        
         violations.append({
             "elementId": None,
             "rule": "LOGO",
             "severity": "warning",
-            "message": "Brand logo should appear on all banners",
+            "message": "Brand logo should appear on all banners - will add Tesco logo at RIGHT SIDE",
             "autoFixable": True,
-            "autoFix": {"action": "add_logo"}
+            "autoFix": {
+                "action": "add_logo",
+                # HARDCODED position - TOP RIGHT corner (scaled to canvas)
+                "left": logo_pos["left"],
+                "top": logo_pos["top"],
+                "width": logo_pos["width"],
+                "height": logo_pos["height"],
+                "position": logo_pos["position"],
+                # USE TESCO LOGO when brand logo missing
+                "useTescoLogo": True,
+                "logoPath": "/images/tesco-logo.png",
+                "logoUrl": "http://localhost:3000/images/tesco-logo.png",
+                # For text fallback if image fails
+                "fallbackText": "Tesco",
+                "fallbackFontSize": 20,
+                "fallbackColor": "#00539F"  # Tesco blue
+            }
         })
     
     return violations
@@ -1031,11 +1217,11 @@ def validate_canvas_locally(canvas: str) -> ValidationResponse:
     # Run ALL 20 validation rules
     all_violations = []
     
-    # Essential rules (1-3)
+    # Essential rules (1-3) - Pass canvas dimensions for HARDCODED positions
     logger.info("📝 Checking essential elements...")
-    all_violations.extend(check_tesco_tag(objects))           # Rule 1
-    all_violations.extend(check_headline(objects))            # Rule 2
-    all_violations.extend(check_subhead(objects))             # Rule 3
+    all_violations.extend(check_tesco_tag(objects, width, height))           # Rule 1
+    all_violations.extend(check_headline(objects, width, height))            # Rule 2
+    all_violations.extend(check_subhead(objects, width, height))             # Rule 3
     
     # Font & text rules (4, 15, 17)
     logger.info("🔤 Checking font & text rules...")
@@ -1046,7 +1232,7 @@ def validate_canvas_locally(canvas: str) -> ValidationResponse:
     # Layout rules (5, 11, 18)
     logger.info("📐 Checking layout rules...")
     all_violations.extend(check_safe_zones(objects, width, height))  # Rule 5
-    all_violations.extend(check_value_tile(objects))          # Rule 11
+    all_violations.extend(check_value_tile(objects, width, height))  # Rule 11 - Pass canvas dims
     all_violations.extend(check_tag_overlap(objects))         # Rule 18
     
     # Visual rules (6, 19)
@@ -1063,7 +1249,7 @@ def validate_canvas_locally(canvas: str) -> ValidationResponse:
     logger.info("🖼️ Checking packshot rules...")
     all_violations.extend(check_packshot(objects))            # Rule 9
     all_violations.extend(check_packshot_safe_zone(objects))  # Rule 10
-    all_violations.extend(check_logo_presence(objects))       # Rule 14
+    all_violations.extend(check_logo_presence(objects, width, height))       # Rule 14 - Pass canvas dims
     all_violations.extend(check_photography_people(objects))  # Rule 16
     
     # Special format rules (12, 13, 20)

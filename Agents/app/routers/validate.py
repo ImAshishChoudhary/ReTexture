@@ -253,7 +253,7 @@ async def auto_fix_compliance(req: AutoFixRequest) -> AutoFixResponse:
 def _build_auto_fix_prompt(
     html: str, css: str, violations: list, canvas_width: int, canvas_height: int
 ) -> str:
-    """Build structured prompt for Gemini auto-fix"""
+    """Build structured prompt for Gemini auto-fix with HARDCODED pixel positions"""
 
     # Get relevant rules from violations
     violation_rules = {v.rule for v in violations}
@@ -263,12 +263,91 @@ def _build_auto_fix_prompt(
         if rule["id"] in violation_rules
     ]
 
+    # === HARDCODED ELEMENT POSITIONS (SCALED TO CANVAS SIZE) ===
+    EDGE_PADDING = 20
+    
+    HARDCODED_POSITIONS = {
+        # Headlines - TOP LEFT area
+        "headline": {
+            "left": EDGE_PADDING,
+            "top": EDGE_PADDING,
+            "width": int(canvas_width * 0.6),  # 60% of canvas
+            "fontSize": max(36, int(canvas_height * 0.05)),  # 5% of height
+            "fontWeight": "bold",
+            "color": "#000000",
+            "textAlign": "left",
+            "fontFamily": "Arial, sans-serif"
+        },
+        # Subheadline - Below headline
+        "subheadline": {
+            "left": EDGE_PADDING,
+            "top": EDGE_PADDING + int(canvas_height * 0.08),  # Below headline
+            "width": int(canvas_width * 0.6),
+            "fontSize": max(22, int(canvas_height * 0.035)),
+            "fontWeight": "normal",
+            "color": "#000000",
+            "textAlign": "left",
+            "fontFamily": "Arial, sans-serif"
+        },
+        # Tesco Tag Sticker - Bottom left, BIG SIZE
+        "tesco_sticker": {
+            "left": EDGE_PADDING,
+            "top": canvas_height - 120,  # Near bottom
+            "width": max(200, int(canvas_width * 0.25)),  # 25% of width
+            "height": max(80, int(canvas_height * 0.12)),  # 12% of height
+        },
+        # Brand Logo - TOP RIGHT corner (when missing, add Tesco logo here)
+        "brand_logo": {
+            "left": canvas_width - 120,  # Right side
+            "top": EDGE_PADDING,  # Top right
+            "width": 100,
+            "height": 40,
+            "position": "top-right"
+        },
+        # Value Tile / Price Sticker - Bottom right corner, BIG
+        "value_tile": {
+            "left": canvas_width - 140,
+            "top": canvas_height - 140,
+            "width": max(120, int(canvas_width * 0.12)),
+            "height": max(120, int(canvas_height * 0.15)),
+        }
+    }
+
     prompt = f"""You are a Tesco Retail Media compliance specialist. Fix the provided HTML/CSS to resolve compliance violations.
 
 === CANVAS SPECIFICATIONS ===
 Width: {canvas_width}px
 Height: {canvas_height}px
-Aspect Ratio: 9:16 (Instagram Stories format)
+
+=== ⚠️ CRITICAL: HARDCODED ELEMENT POSITIONS (USE EXACTLY THESE VALUES!) ===
+
+📝 HEADLINE (if missing or needs fixing):
+   - Position: left={HARDCODED_POSITIONS['headline']['left']}px, top={HARDCODED_POSITIONS['headline']['top']}px
+   - Size: fontSize={HARDCODED_POSITIONS['headline']['fontSize']}px, width={HARDCODED_POSITIONS['headline']['width']}px
+   - Style: fontWeight=bold, color={HARDCODED_POSITIONS['headline']['color']}, textAlign=left
+   - ⚠️ DO NOT use "Your headline here"! Generate creative text like: "Fresh & Delicious", "Quality You Trust", "Taste the Best"
+
+📝 SUBHEADLINE (if missing or needs fixing):
+   - Position: left={HARDCODED_POSITIONS['subheadline']['left']}px, top={HARDCODED_POSITIONS['subheadline']['top']}px
+   - Size: fontSize={HARDCODED_POSITIONS['subheadline']['fontSize']}px, width={HARDCODED_POSITIONS['subheadline']['width']}px
+   - Style: fontWeight=normal, color={HARDCODED_POSITIONS['subheadline']['color']}, textAlign=left
+   - ⚠️ DO NOT use placeholder! Generate text like: "Quality you can trust", "Fresh from farm to table"
+
+🏷️ TESCO TAG STICKER (if missing):
+   - Position: left={HARDCODED_POSITIONS['tesco_sticker']['left']}px, top={HARDCODED_POSITIONS['tesco_sticker']['top']}px
+   - Size: width={HARDCODED_POSITIONS['tesco_sticker']['width']}px, height={HARDCODED_POSITIONS['tesco_sticker']['height']}px
+   - Text: "Available at Tesco" - BIG FONT (24px minimum)
+   - Must be clearly visible! INCREASE SIZE if too small!
+
+🏢 BRAND LOGO / TESCO LOGO (if missing):
+   - Position: left={HARDCODED_POSITIONS['brand_logo']['left']}px (TOP RIGHT!), top={HARDCODED_POSITIONS['brand_logo']['top']}px
+   - Size: width={HARDCODED_POSITIONS['brand_logo']['width']}px, height={HARDCODED_POSITIONS['brand_logo']['height']}px
+   - ⚠️ IMPORTANT: If no brand logo exists, ADD "Tesco" text at TOP RIGHT corner!
+   - Use Tesco blue color: #00539F
+
+💰 VALUE TILE (if present):
+   - Position: left={HARDCODED_POSITIONS['value_tile']['left']}px, top={HARDCODED_POSITIONS['value_tile']['top']}px
+   - Size: width={HARDCODED_POSITIONS['value_tile']['width']}px, height={HARDCODED_POSITIONS['value_tile']['height']}px
 
 === VIOLATIONS DETECTED ({len(violations)}) ===
 """
@@ -298,14 +377,23 @@ Example: {rule.get("example_fix", "N/A")}
 === CURRENT CSS ===
 {css}
 
-=== INSTRUCTIONS ===
-1. Analyze each violation carefully
-2. Apply fixes according to the rule fix_instruction
-3. Maintain element structure and IDs
-4. Preserve image placeholders ({{{{ IMG_N }}}}) exactly as-is
-5. Return ONLY valid, well-formed HTML/CSS
-6. Ensure all opening tags have matching closing tags
-7. Do not remove or modify placeholder syntax
+=== ⚠️ CRITICAL INSTRUCTIONS ===
+1. USE THE EXACT PIXEL POSITIONS SPECIFIED ABOVE - copy them exactly!
+2. For HEADLINE: Generate creative text like "Fresh & Delicious", "Quality You Trust" - NOT "Your headline here"!
+3. For SUBHEADLINE: Generate text like "Quality you can trust" - NOT placeholder text!
+4. For TESCO STICKER: Make it BIG ({HARDCODED_POSITIONS['tesco_sticker']['width']}x{HARDCODED_POSITIONS['tesco_sticker']['height']}px), text "Available at Tesco"
+5. For BRAND LOGO: Add "Tesco" text at TOP RIGHT (left={HARDCODED_POSITIONS['brand_logo']['left']}px, top={HARDCODED_POSITIONS['brand_logo']['top']}px), color=#00539F
+6. Preserve image placeholders ({{{{ IMG_N }}}}) exactly as-is
+7. Return ONLY valid, well-formed HTML/CSS
+8. Ensure all opening tags have matching closing tags
+
+=== EXAMPLE FIX FOR MISSING HEADLINE ===
+Add this div:
+<div style="position: absolute; left: {HARDCODED_POSITIONS['headline']['left']}px; top: {HARDCODED_POSITIONS['headline']['top']}px; font-size: {HARDCODED_POSITIONS['headline']['fontSize']}px; font-weight: bold; color: {HARDCODED_POSITIONS['headline']['color']};">Fresh & Delicious</div>
+
+=== EXAMPLE FIX FOR MISSING BRAND LOGO ===
+Add this div at TOP RIGHT:
+<div style="position: absolute; left: {HARDCODED_POSITIONS['brand_logo']['left']}px; top: {HARDCODED_POSITIONS['brand_logo']['top']}px; font-size: 20px; font-weight: bold; color: #00539F;">Tesco</div>
 
 === OUTPUT FORMAT (JSON) ===
 Return a JSON object with this exact structure:
@@ -319,13 +407,13 @@ Return a JSON object with this exact structure:
       "element_selector": ".element-class or tag",
       "property": "property name (fontSize, y, color, etc.)",
       "old_value": "previous value",
-      "new_value": "corrected value",
+      "new_value": "corrected value with EXACT pixel values",
       "description": "brief description of what was fixed"
     }}
   ]
 }}
 
-Begin correction now.
+Begin correction now. USE THE EXACT POSITIONS I SPECIFIED!
 """
 
     return prompt
@@ -497,37 +585,51 @@ async def generate_content_for_fix(req: GenerateContentRequest) -> GenerateConte
 
 
 def _build_content_generation_prompt(rule: str, headline: str, product: str) -> str:
-    """Build prompt for content generation based on rule type"""
+    """Build prompt for content generation based on rule type - generates PRODUCT-SPECIFIC creative text"""
     
     if rule == "SUBHEAD" or rule == "MISSING_SUBHEAD":
-        return f"""Generate a short, compelling subhead/tagline for a Tesco retail advertisement.
+        return f"""Generate a creative, compelling PARAGRAPH subheadline for a Tesco retail advertisement.
 
-Context:
-- Headline: "{headline or 'Product Advertisement'}"
-- Product: "{product or 'Consumer goods'}"
-- Brand: Tesco retail media
+Product/Context: "{product or headline or 'Fresh product'}"
 
 Requirements:
-- Maximum 8 words
-- Complementary to the headline
-- Professional retail tone
+- Write 12-20 words as a COMPLETE SENTENCE or two short sentences
+- Must relate DIRECTLY to the product shown
+- Highlight product benefits (fresh, quality, taste, value, everyday essentials)
+- Professional but warm Tesco tone
+- Descriptive and informative like a product tagline
 - Do NOT include prices or promotions
-- Do NOT include CTAs like "Shop now"
+- Do NOT include CTAs
 
-Return ONLY the subhead text, no quotes or explanation."""
+Examples of GOOD longer subheadlines:
+- For skincare: "Discover simple routines for healthy, happy skin with our everyday essentials."
+- For banana: "Perfectly ripe and naturally sweet, picked at the peak of freshness for your family."
+- For milk: "Fresh from farm to fridge daily, bringing quality dairy to your breakfast table."
+- For bread: "Baked fresh every single day, crafted with care for that perfect golden taste."
+- For snacks: "Delicious moments anytime you want them, perfect for sharing with family and friends."
+- Generic: "Quality you can trust for your everyday needs, delivering value with every purchase."
+
+Return ONLY the subhead text (12-20 words), no quotes or explanation."""
 
     elif rule == "HEADLINE" or rule == "MISSING_HEADLINE":
-        return f"""Generate a short, impactful headline for a Tesco retail advertisement.
+        return f"""Generate a catchy, creative headline for a Tesco retail advertisement.
 
-Context:
-- Product: "{product or 'Consumer product'}"
-- Style: Tesco retail media creative
+Product/Context: "{product or 'Quality product'}"
 
 Requirements:
-- Maximum 6 words
-- Bold, attention-grabbing
+- Maximum 5 words
+- Bold and attention-grabbing
+- Must connect to the product
+- Creative and memorable (like "Nano Banana" style)
 - Do NOT include prices
 - Do NOT include CTAs
+
+Examples of GOOD headlines:
+- For banana: "Go Bananas!", "Nano Banana Bliss", "Yellow Perfection"
+- For milk: "Pure & Fresh", "Dairy Delight"
+- For bread: "Rise & Shine", "Golden Goodness"
+- For snacks: "Snack Attack!", "Crunch Time"
+- Generic: "Taste the Difference", "Quality Every Day"
 
 Return ONLY the headline text, no quotes or explanation."""
 
@@ -543,14 +645,18 @@ Return ONLY the headline text, no quotes or explanation."""
     elif rule == "DRINKAWARE":
         return "drinkaware.co.uk"
     
+    elif rule == "LOGO" or rule == "MISSING_LOGO":
+        # When logo is missing, we return instruction to add Tesco logo
+        return "ADD_TESCO_LOGO_RIGHT_SIDE"
+    
     else:
         return f"""Generate appropriate text content for a Tesco retail advertisement.
 
-Rule to address: {rule}
-Context: {headline or 'Retail advertisement'}
+Product/Context: "{product or headline or 'Retail product'}"
 
 Requirements:
 - Professional retail tone
+- Creative and product-relevant
 - Tesco brand appropriate
 - Maximum 10 words
 
@@ -560,7 +666,7 @@ Return ONLY the text, no quotes or explanation."""
 def _get_fallback_content(rule: str, headline: str = "") -> str:
     """Return fallback content if AI generation fails"""
     fallbacks = {
-        "SUBHEAD": "Quality you can trust" if not headline else f"Discover more",
+        "SUBHEAD": "Discover quality products for your everyday needs, delivering value and freshness with every purchase.",
         "HEADLINE": "Quality Guaranteed",
         "TESCO_TAG": "Available at Tesco",
         "MISSING_TAG": "Available at Tesco",
