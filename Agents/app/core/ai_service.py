@@ -321,11 +321,11 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
         print(f"[AI DEBUG] Error processing: {e}")
         return None
     
-    # Remove background using rembg with full quality
+    # Remove background using rembg with faster model
     try:
-        print(f"[AI DEBUG] Removing background with rembg...")
-        # Use default settings (with alpha matting for quality)
-        product_no_bg = remove(processed_bytes)
+        print(f"[AI DEBUG] Removing background with rembg (u2netp fast model)...")
+        # Use u2netp model - 3-4x faster while maintaining good quality
+        product_no_bg = remove(processed_bytes, model_name='u2netp')
         product_img = Image.open(io.BytesIO(product_no_bg)).convert('RGBA')
         print(f"[AI DEBUG] Background removed, product size: {product_img.size}")
     except Exception as e:
