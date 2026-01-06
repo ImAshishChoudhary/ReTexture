@@ -354,44 +354,36 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
     style_prompt = style_prompts.get(style, style_prompts["studio"])
     
     try:
-        full_prompt = f"""
-        Keep the product in the input image EXACTLY unchanged.
-        Generate a new background: {style_prompt}
-        High realism, commercial photography.
-        Output a square 1:1 aspect ratio image.
-        """
+        full_prompt = f"""Product photography: {style_prompt}"""
         
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=[
-                types.Part.from_text(text=full_prompt),
-                types.Part.from_bytes(
-                    mime_type="image/png",
-                    data=product_bytes,
-                ),
-            ],
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"],
+        print(f"[AI DEBUG] Calling Imagen 3 for {style}")
+        print(f"[AI DEBUG] Model: imagen-3.0-generate-001")
+        print(f"[AI DEBUG] Prompt length: {len(full_prompt)}")
+        
+        # Use Imagen 3 for image generation
+        response = client.models.generate_images(
+            model='imagen-3.0-generate-001',
+            prompt=full_prompt,
+            config=types.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio='1:1',
+                safety_filter_level='block_some',
+                person_generation='allow_adult',
             ),
         )
         
-        if response.candidates:
-            for candidate in response.candidates:
-                if hasattr(candidate, 'content') and candidate.content:
-                    for part in candidate.content.parts:
-                        if hasattr(part, 'inline_data') and part.inline_data:
-                            image_data = part.inline_data.data
-                            base64_image = base64.b64encode(image_data).decode('utf-8')
-                            return base64_image
+        print(f"[AI DEBUG] Response received, processing...")
         
-        # Fallback: Check response.parts directly
-        if response.parts:
-            for part in response.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    image_data = part.inline_data.data
-                    base64_image = base64.b64encode(image_data).decode('utf-8')
-                    return base64_image
+        # Imagen returns generated_images list
+        if hasattr(response, 'generated_images') and response.generated_images:
+            first_image = response.generated_images[0]
+            if hasattr(first_image, 'image') and hasattr(first_image.image, 'image_bytes'):
+                image_data = first_image.image.image_bytes
+                base64_image = base64.b64encode(image_data).decode('utf-8')
+                print(f"[AI DEBUG] ✓ Generated {len(base64_image)} chars for {style}")
+                return base64_image
         
+        print(f"[AI DEBUG] ✗ No image data in response for {style}")
         return None
         
     except Exception as e:
