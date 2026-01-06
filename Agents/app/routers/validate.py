@@ -31,8 +31,8 @@ with open(RULES_PATH, "r", encoding="utf-8") as f:
     VALIDATION_RULES = json.load(f)
 
 # Gemini configuration
-PROJECT_ID = os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2")
-LOCATION = os.getenv("GCP_LOCATION", "us-central1")
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+LOCATION = os.getenv("GCP_LOCATION")
 MODEL_ID = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash-image")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 

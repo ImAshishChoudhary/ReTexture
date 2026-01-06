@@ -10,8 +10,8 @@ import json
 import os
 
 # Gemini setup
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "your-project-id")
-LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+LOCATION = os.getenv("GCP_LOCATION")
 
 
 def validate_with_gemini_guardrail(request: GenerationRequest):

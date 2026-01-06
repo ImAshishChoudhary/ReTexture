@@ -448,8 +448,8 @@ async def validate_canvas(req: ValidationRequest) -> ValidationResponse:
         # 2. Call Gemini for validation & correction
         client = genai.Client(
             vertexai=True,
-            project=os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2"),
-            location=os.getenv("GCP_LOCATION", "us-central1"),
+            project=os.getenv("GCP_PROJECT_ID"),
+            location=os.getenv("GCP_LOCATION"),
         )
 
         prompt = f"{COMPLIANCE_SYSTEM_PROMPT}\n\nCanvas HTML/CSS:\n{canvas_content}"

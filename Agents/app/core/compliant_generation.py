@@ -22,9 +22,9 @@ from .logo_overlay import add_logos
 
 
 # Gemini setup
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "your-project-id")
-LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-MODEL_ID = "gemini-2.5-flash"
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+LOCATION = os.getenv("GCP_LOCATION")
+MODEL_ID = os.getenv("GEMINI_MODEL_ID")
 
 
 def generate_compliant_banner(request: GenerationRequest) -> GenerationResponse:

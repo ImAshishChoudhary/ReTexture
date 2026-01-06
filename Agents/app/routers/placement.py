@@ -33,8 +33,8 @@ model = None
 try:
     client = genai.Client(
         vertexai=True,
-        project=os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2"),
-        location=os.getenv("GCP_LOCATION", "us-central1")
+        project=os.getenv("GCP_PROJECT_ID"),
+        location=os.getenv("GCP_LOCATION")
     )
     model = client.models
 except Exception as e:

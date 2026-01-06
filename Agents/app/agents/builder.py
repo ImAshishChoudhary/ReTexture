@@ -5,9 +5,9 @@ import logging
 import os
 
 load_dotenv()
-PROJECT_ID = "firstproject-c5ac2"
-LOCATION = "us-central1"
-MODEL_ID = "gemini-2.5-flash-image"
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+LOCATION = os.getenv("GCP_LOCATION")
+MODEL_ID = os.getenv("GEMINI_MODEL_ID")
 logger = logging.getLogger(__name__)
 
 _agent = None
