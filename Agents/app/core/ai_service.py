@@ -160,48 +160,88 @@ def generate_variations_from_bytes(image_bytes: bytes, user_concept: str) -> lis
     """
     import base64
     import gc
+    import psutil
+    import traceback
+    from datetime import datetime
     
-    print("=" * 60)
-    print("[AI_SERVICE DEBUG] generate_variations_from_bytes called")
-    print("=" * 60)
-    print(f"[AI_SERVICE DEBUG] Input image bytes: {len(image_bytes)} bytes")
-    print(f"[AI_SERVICE DEBUG] User concept: {user_concept}")
+    start_time = datetime.now()
+    
+    def log_mem(stage):
+        try:
+            process = psutil.Process()
+            mem_mb = process.memory_info().rss / 1024 / 1024
+            print(f"[AI_SERVICE MEMORY] {stage}: {mem_mb:.2f} MB")
+            return mem_mb
+        except:
+            return 0
+    
+    print("=" * 80)
+    print(f"[AI_SERVICE DEBUG] generate_variations_from_bytes called at {start_time.isoformat()}")
+    print("=" * 80)
+    print(f"[AI_SERVICE DEBUG] Input parameters:")
+    print(f"[AI_SERVICE DEBUG]   - Image bytes: {len(image_bytes)} bytes ({len(image_bytes)/1024:.1f} KB)")
+    print(f"[AI_SERVICE DEBUG]   - User concept: '{user_concept}'")
+    log_mem("Function start")
     
     # Process input image with reduced resolution to save memory
-    print("[AI_SERVICE DEBUG] Opening and processing input image...")
-    with Image.open(io.BytesIO(image_bytes)) as img:
-        print(f"[AI_SERVICE DEBUG] Original image mode: {img.mode}, size: {img.size}")
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-            print(f"[AI_SERVICE DEBUG] Converted to RGB mode")
-        
-        # Reduce from 1024x1024 to 768x768 to save memory
-        img.thumbnail((768, 768))
-        print(f"[AI_SERVICE DEBUG] Resized to: {img.size}")
-        
-        img_byte_arr = io.BytesIO()
-        # Use PNG optimization to reduce file size
-        img.save(img_byte_arr, format='PNG', optimize=True)
-        product_bytes = img_byte_arr.getvalue()
-        print(f"[AI_SERVICE DEBUG] Processed image bytes: {len(product_bytes)} bytes")
+    print("[AI_SERVICE DEBUG] Step 1: Processing input image...")
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            print(f"[AI_SERVICE DEBUG]   - Original mode: {img.mode}")
+            print(f"[AI_SERVICE DEBUG]   - Original size: {img.size} ({img.width}x{img.height})")
+            print(f"[AI_SERVICE DEBUG]   - Original format: {img.format}")
+            
+            if img.mode != 'RGB':
+                print(f"[AI_SERVICE DEBUG]   - Converting {img.mode} → RGB")
+                img = img.convert('RGB')
+            
+            # Reduce from 1024x1024 to 768x768 to save memory
+            original_size = img.size
+            img.thumbnail((768, 768))
+            print(f"[AI_SERVICE DEBUG]   - Resized: {original_size} → {img.size}")
+            print(f"[AI_SERVICE DEBUG]   - Pixel reduction: {(1 - (img.width * img.height) / (original_size[0] * original_size[1])) * 100:.1f}%")
+            log_mem("After image resize")
+            
+            img_byte_arr = io.BytesIO()
+            # Use PNG optimization to reduce file size
+            img.save(img_byte_arr, format='PNG', optimize=True)
+            product_bytes = img_byte_arr.getvalue()
+            print(f"[AI_SERVICE DEBUG]   - Processed size: {len(product_bytes)} bytes ({len(product_bytes)/1024:.1f} KB)")
+            print(f"[AI_SERVICE DEBUG]   - Compression ratio: {len(product_bytes)/len(image_bytes)*100:.1f}%")
+    except Exception as img_error:
+        print(f"[AI_SERVICE DEBUG] ✗ Image processing failed:")
+        print(f"[AI_SERVICE DEBUG]   - Error: {type(img_error).__name__}: {img_error}")
+        print(f"[AI_SERVICE DEBUG] Traceback:")
+        print(traceback.format_exc())
+        return []
     
     # Clear byte array from memory
     img_byte_arr.close()
     del img_byte_arr
     gc.collect()
+    log_mem("After cleanup")
 
-    print("[AI_SERVICE DEBUG] Initializing Gemini client...")
-    print(f"[AI_SERVICE DEBUG] PROJECT_ID: {PROJECT_ID}")
-    print(f"[AI_SERVICE DEBUG] LOCATION: {LOCATION}")
-    print(f"[AI_SERVICE DEBUG] MODEL_ID: {MODEL_ID}")
+    print("[AI_SERVICE DEBUG] Step 2: Initializing Gemini client...")
+    print(f"[AI_SERVICE DEBUG]   - PROJECT_ID: {PROJECT_ID}")
+    print(f"[AI_SERVICE DEBUG]   - LOCATION: {LOCATION}")
+    print(f"[AI_SERVICE DEBUG]   - MODEL_ID: {MODEL_ID}")
     
-    client = genai.Client(
-        vertexai=True,
-        project=PROJECT_ID,
-        location=LOCATION,
-    )
-    print("[AI_SERVICE DEBUG] Gemini client initialized successfully")
+    try:
+        client = genai.Client(
+            vertexai=True,
+            project=PROJECT_ID,
+            location=LOCATION,
+        )
+        print("[AI_SERVICE DEBUG] ✓ Gemini client initialized successfully")
+        log_mem("After client init")
+    except Exception as client_error:
+        print(f"[AI_SERVICE DEBUG] ✗ Client initialization failed:")
+        print(f"[AI_SERVICE DEBUG]   - Error: {type(client_error).__name__}: {client_error}")
+        print(f"[AI_SERVICE DEBUG] Traceback:")
+        print(traceback.format_exc())
+        return []
 
+    print("[AI_SERVICE DEBUG] Step 3: Preparing style prompts...")
     styles = [
         # STUDIO - Clean e-commerce style
         f"""Professional e-commerce product photography of the provided product.
@@ -240,20 +280,25 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
     ]
 
     generated_base64 = []
-    print(f"[AI_SERVICE DEBUG] Will generate {len(styles)} variations")
-    print("-" * 60)
+    style_names = ["Studio", "Lifestyle", "Creative"]
+    print(f"[AI_SERVICE DEBUG] Step 4: Generating {len(styles)} variations...")
+    print(f"[AI_SERVICE DEBUG]   - Styles: {', '.join(style_names)}")
+    print("-" * 80)
 
     for i, style_prompt in enumerate(styles):
         variation_num = i + 1
+        variation_start = datetime.now()
         
         # Add delay between requests to avoid rate limiting (except for first request)
         if i > 0:
             delay_seconds = 5
-            print(f"[AI_SERVICE DEBUG] Waiting {delay_seconds}s before next request (rate limit protection)...")
+            print(f"[AI_SERVICE DEBUG] Rate limit delay: waiting {delay_seconds}s...")
             time.sleep(delay_seconds)
         
-        print(f"\n[AI_SERVICE DEBUG] === VARIATION {variation_num}/{len(styles)} ===")
-        print(f"[AI_SERVICE DEBUG] Style: {style_prompt[:80]}...")
+        print(f"\n[AI_SERVICE DEBUG] === VARIATION {variation_num}/{len(styles)}: {style_names[i]} ===")
+        print(f"[AI_SERVICE DEBUG] Started at: {variation_start.isoformat()}")
+        print(f"[AI_SERVICE DEBUG] Style prompt: {style_prompt[:100]}...")
+        log_mem(f"Before variation {variation_num}")
         
         # Retry logic with exponential backoff for rate limiting
         max_retries = 3
@@ -266,8 +311,11 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                 Generate a new background: {style_prompt}
                 High realism, commercial photography.
                 """
-                print(f"[AI_SERVICE DEBUG] Sending request to Gemini API... (attempt {retry + 1}/{max_retries})")
-
+                print(f"[AI_SERVICE DEBUG] API call attempt {retry + 1}/{max_retries}")
+                print(f"[AI_SERVICE DEBUG]   - Prompt length: {len(full_prompt)} chars")
+                print(f"[AI_SERVICE DEBUG]   - Image data: {len(product_bytes)} bytes")
+                
+                api_call_start = datetime.now()
                 response = client.models.generate_content(
                     model=MODEL_ID,
                     contents=[
@@ -283,34 +331,52 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                     ),
                 )
                 
-                print(f"[AI_SERVICE DEBUG] Response received from Gemini")
-                print(f"[AI_SERVICE DEBUG] Response has parts: {bool(response.parts)}")
+                api_call_time = (datetime.now() - api_call_start).total_seconds()
+                print(f"[AI_SERVICE DEBUG] ✓ API responded in {api_call_time:.2f}s")
+                print(f"[AI_SERVICE DEBUG] Response type: {type(response)}")
+                print(f"[AI_SERVICE DEBUG] Has parts: {bool(response.parts)}")
+                print(f"[AI_SERVICE DEBUG] Has candidates: {bool(response.candidates)}")
+                log_mem(f"After API response {variation_num}")
                 
                 if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
                     parts = response.candidates[0].content.parts
-                    print(f"[AI_SERVICE DEBUG] Number of parts: {len(parts)}")
+                    print(f"[AI_SERVICE DEBUG] Processing {len(parts)} part(s)")
+                    
                     for j, part in enumerate(parts):
-                        print(f"[AI_SERVICE DEBUG] Part {j+1}: has inline_data = {bool(part.inline_data)}")
+                        print(f"[AI_SERVICE DEBUG]   Part {j+1}:")
+                        print(f"[AI_SERVICE DEBUG]     - Type: {type(part)}")
+                        print(f"[AI_SERVICE DEBUG]     - Has inline_data: {bool(part.inline_data)}")
+                        
                         if part.inline_data:
                             # Convert to base64 instead of saving to file
                             img_data = part.inline_data.data
-                            print(f"[AI_SERVICE DEBUG] Image data size: {len(img_data)} bytes")
+                            data_size_kb = len(img_data) / 1024
+                            print(f"[AI_SERVICE DEBUG]     - Raw image size: {data_size_kb:.1f} KB")
                             
+                            encode_start = datetime.now()
                             base64_str = base64.b64encode(img_data).decode('utf-8')
-                            print(f"[AI_SERVICE DEBUG] Base64 string length: {len(base64_str)} chars")
+                            encode_time = (datetime.now() - encode_start).total_seconds()
+                            b64_size_kb = len(base64_str) / 1024
+                            print(f"[AI_SERVICE DEBUG]     - Base64 size: {b64_size_kb:.1f} KB")
+                            print(f"[AI_SERVICE DEBUG]     - Encoding time: {encode_time:.2f}s")
                             
                             generated_base64.append(base64_str)
-                            print(f"[AI_SERVICE DEBUG] ✅ VARIATION {variation_num} GENERATED SUCCESSFULLY!")
-                            print(f"[AI_SERVICE DEBUG] Total variations so far: {len(generated_base64)}")
+                            
+                            variation_time = (datetime.now() - variation_start).total_seconds()
+                            print(f"[AI_SERVICE DEBUG] ✓✓✓ VARIATION {variation_num} ({style_names[i]}) COMPLETE!")
+                            print(f"[AI_SERVICE DEBUG]     - Total time: {variation_time:.2f}s")
+                            print(f"[AI_SERVICE DEBUG]     - Progress: {len(generated_base64)}/{len(styles)} complete")
                             
                             # Clear image data from memory immediately
                             del img_data
                             del base64_str
                             del part
                             gc.collect()
+                            log_mem(f"After cleanup variation {variation_num}")
                             break
                 else:
-                    print(f"[AI_SERVICE DEBUG] ⚠️ No parts/candidates in response for variation {variation_num}")
+                    print(f"[AI_SERVICE DEBUG] ✗ No parts/candidates in response")
+                    print(f"[AI_SERVICE DEBUG]   - response.candidates: {response.candidates if response.candidates else 'None'}")
                 
                 # Clear response from memory
                 del response
@@ -323,27 +389,53 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                 error_msg = str(e)
                 is_rate_limit = "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg
                 
-                print(f"[AI_SERVICE DEBUG] ❌ ERROR generating variation {variation_num} (attempt {retry + 1}):")
-                print(f"[AI_SERVICE DEBUG] Error type: {type(e).__name__}")
-                print(f"[AI_SERVICE DEBUG] Error message: {e}")
+                print(f"[AI_SERVICE DEBUG] ✗ ERROR on variation {variation_num} (attempt {retry + 1}/{max_retries}):")
+                print(f"[AI_SERVICE DEBUG]   - Error type: {type(e).__name__}")
+                print(f"[AI_SERVICE DEBUG]   - Error message: {str(e)}")
+                print(f"[AI_SERVICE DEBUG]   - Is rate limit: {is_rate_limit}")
+                log_mem(f"Error on variation {variation_num}")
                 
                 if is_rate_limit and retry < max_retries - 1:
                     # Exponential backoff: 10s, 20s, 40s
                     wait_time = base_delay * (2 ** retry)
-                    print(f"[AI_SERVICE DEBUG] 🔄 Rate limit hit! Waiting {wait_time}s before retry...")
+                    print(f"[AI_SERVICE DEBUG] 🔄 Rate limit detected, backing off {wait_time}s...")
                     time.sleep(wait_time)
                     continue
                 else:
-                    import traceback
-                    print(f"[AI_SERVICE DEBUG] Traceback:\n{traceback.format_exc()}")
+                    print(f"[AI_SERVICE DEBUG] Full traceback:")
+                    print(traceback.format_exc())
+                    log_mem(f"Final error variation {variation_num}")
                     break
 
-    print("\n" + "=" * 60)
-    print(f"[AI_SERVICE DEBUG] GENERATION COMPLETE")
-    print(f"[AI_SERVICE DEBUG] Total variations generated: {len(generated_base64)}")
-    for i, b64 in enumerate(generated_base64):
-        print(f"[AI_SERVICE DEBUG] Variation {i+1}: {len(b64)} chars")
-    print("=" * 60)
+    # Final summary
+    total_time = (datetime.now() - start_time).total_seconds()
+    print("\n" + "=" * 80)
+    print(f"[AI_SERVICE DEBUG] ===== GENERATION SUMMARY =====")
+    print(f"[AI_SERVICE DEBUG] Started:  {start_time.isoformat()}")
+    print(f"[AI_SERVICE DEBUG] Finished: {datetime.now().isoformat()}")
+    print(f"[AI_SERVICE DEBUG] Duration: {total_time:.2f}s ({total_time/60:.1f} min)")
+    print(f"[AI_SERVICE DEBUG] Requested: {len(styles)} variations")
+    print(f"[AI_SERVICE DEBUG] Generated: {len(generated_base64)} variations")
+    print(f"[AI_SERVICE DEBUG] Success rate: {len(generated_base64)/len(styles)*100:.0f}%")
+    
+    if generated_base64:
+        total_size = sum(len(b64) for b64 in generated_base64)
+        avg_size = total_size / len(generated_base64)
+        print(f"[AI_SERVICE DEBUG] Total data: {total_size/1024:.1f} KB")
+        print(f"[AI_SERVICE DEBUG] Average size: {avg_size/1024:.1f} KB per variation")
+        
+        for i, b64 in enumerate(generated_base64):
+            print(f"[AI_SERVICE DEBUG]   Variation {i+1} ({style_names[i]}): {len(b64)/1024:.1f} KB")
+    else:
+        print(f"[AI_SERVICE DEBUG] ⚠️ NO VARIATIONS GENERATED!")
+        print(f"[AI_SERVICE DEBUG] Check:")
+        print(f"[AI_SERVICE DEBUG]   - API key validity")
+        print(f"[AI_SERVICE DEBUG]   - Network connectivity")
+        print(f"[AI_SERVICE DEBUG]   - Gemini API quota")
+        print(f"[AI_SERVICE DEBUG]   - Error messages above")
+    
+    log_mem("Function end")
+    print("=" * 80)
     
     return generated_base64
 
