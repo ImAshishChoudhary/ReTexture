@@ -304,30 +304,30 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
     
     print(f"[AI DEBUG] Starting {style} variation generation")
     
-    # First resize image to make rembg faster (512x512 is much faster than 1024x1024)
+    # Process image at full quality (1024x1024)
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:
-            # Reduce to 512x512 for faster processing
-            img.thumbnail((512, 512), Image.Resampling.LANCZOS)
+            # Keep full size for quality
+            img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
             
             # Save to bytes for rembg
             temp_buffer = io.BytesIO()
             img.save(temp_buffer, format='PNG')
-            resized_bytes = temp_buffer.getvalue()
-            print(f"[AI DEBUG] Resized to {img.size} for faster processing")
+            processed_bytes = temp_buffer.getvalue()
+            print(f"[AI DEBUG] Prepared image at {img.size}")
     except Exception as e:
-        print(f"[AI DEBUG] Error resizing: {e}")
+        print(f"[AI DEBUG] Error processing: {e}")
         return None
     
-    # Remove background using rembg with fast model
+    # Remove background using rembg with full quality
     try:
-        print(f"[AI DEBUG] Removing background with rembg (fast model)...")
-        # Use u2net_human_seg for faster processing (if it's a person) or u2net for general
-        product_no_bg = remove(resized_bytes, alpha_matting=False)  # Disable alpha matting for speed
+        print(f"[AI DEBUG] Removing background with rembg...")
+        # Use default settings (with alpha matting for quality)
+        product_no_bg = remove(processed_bytes)
         product_img = Image.open(io.BytesIO(product_no_bg)).convert('RGBA')
-        print(f"[AI DEBUG] Background removed in, product size: {product_img.size}")
+        print(f"[AI DEBUG] Background removed, product size: {product_img.size}")
     except Exception as e:
         print(f"[AI DEBUG] Error removing background: {e}")
         # Fallback: use original image without background removal
@@ -341,8 +341,8 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
         except:
             return None
     
-    # Create styled background based on style (512x512 for speed)
-    canvas_size = (512, 512)
+    # Create styled background at full quality (1024x1024)
+    canvas_size = (1024, 1024)
     
     try:
         if style == "studio":

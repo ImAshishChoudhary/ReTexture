@@ -45,12 +45,12 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
     console.log('[VARIATIONS] Cold start toast displayed');
 
     try {
-      // Call streaming endpoint with longer timeout for Render cold start
+      // Call streaming endpoint with longer timeout for Render cold start and parallel processing
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.error('[VARIATIONS] Request timeout after 120 seconds');
+        console.error('[VARIATIONS] Request timeout after 300 seconds');
         controller.abort();
-      }, 120000); // 2 min timeout
+      }, 300000); // 5 min timeout to handle parallel processing + cold start
 
       const apiUrl = `${API_BASE_URL}/generate/variations/stream`;
       console.log('[VARIATIONS] Calling API:', apiUrl);
