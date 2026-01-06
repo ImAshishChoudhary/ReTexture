@@ -455,21 +455,44 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
     """
     import base64
     import gc
+    import traceback
+    import psutil
+    from datetime import datetime
     
-    print(f"\n[AI_SERVICE DEBUG] generate_single_variation called")
-    print(f"[AI_SERVICE DEBUG] Style: {style}")
-    print(f"[AI_SERVICE DEBUG] Concept: {user_concept}")
+    start_time = datetime.now()
+    print("\n" + "=" * 80)
+    print(f"[AI_SERVICE SINGLE] generate_single_variation called at {start_time.isoformat()}")
+    print(f"[AI_SERVICE SINGLE] Style: {style}")
+    print(f"[AI_SERVICE SINGLE] Concept: {user_concept}")
+    print(f"[AI_SERVICE SINGLE] Image bytes: {len(image_bytes)} ({len(image_bytes)/1024:.1f} KB)")
+    
+    try:
+        process = psutil.Process()
+        mem_mb = process.memory_info().rss / 1024 / 1024
+        print(f"[AI_SERVICE SINGLE] Memory at start: {mem_mb:.2f} MB")
+    except:
+        pass
     
     # Process input image with reduced resolution to save memory
-    with Image.open(io.BytesIO(image_bytes)) as img:
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        # Reduce from 1024x1024 to 768x768 to save memory (40% less pixels)
-        img.thumbnail((768, 768))
-        img_byte_arr = io.BytesIO()
-        # Use PNG optimization to reduce file size
-        img.save(img_byte_arr, format='PNG', optimize=True)
-        product_bytes = img_byte_arr.getvalue()
+    print("[AI_SERVICE SINGLE] Step 1: Processing image...")
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            print(f"[AI_SERVICE SINGLE]   Original: {img.mode}, {img.size}")
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+                print(f"[AI_SERVICE SINGLE]   Converted to RGB")
+            # Reduce from 1024x1024 to 768x768 to save memory (40% less pixels)
+            img.thumbnail((768, 768))
+            print(f"[AI_SERVICE SINGLE]   Resized to: {img.size}")
+            img_byte_arr = io.BytesIO()
+            # Use PNG optimization to reduce file size
+            img.save(img_byte_arr, format='PNG', optimize=True)
+            product_bytes = img_byte_arr.getvalue()
+            print(f"[AI_SERVICE SINGLE]   Processed: {len(product_bytes)} bytes ({len(product_bytes)/1024:.1f} KB)")
+    except Exception as img_error:
+        print(f"[AI_SERVICE SINGLE] ✗ Image processing failed: {img_error}")
+        print(traceback.format_exc())
+        return None
     
     # Clear byte array from memory
     img_byte_arr.close()
@@ -477,12 +500,26 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
     gc.collect()
     
     # Initialize client with API key (not Vertex AI)
+    print("[AI_SERVICE SINGLE] Step 2: Checking API key...")
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("[AI_SERVICE DEBUG] ❌ No GOOGLE_API_KEY found in environment")
+        print("[AI_SERVICE SINGLE] ✗✗✗ CRITICAL: No GOOGLE_API_KEY found in environment!")
+        print("[AI_SERVICE SINGLE] Environment variables available:")
+        for key in sorted(os.environ.keys()):
+            if 'GOOGLE' in key.upper() or 'API' in key.upper() or 'KEY' in key.upper():
+                print(f"[AI_SERVICE SINGLE]   - {key}: {'SET' if os.environ.get(key) else 'NOT SET'}")
         return None
     
-    client = genai.Client(api_key=api_key)
+    print(f"[AI_SERVICE SINGLE] ✓ API key found: {api_key[:10]}...{api_key[-5:]}")
+    
+    print("[AI_SERVICE SINGLE] Step 3: Initializing Gemini client...")
+    try:
+        client = genai.Client(api_key=api_key)
+        print("[AI_SERVICE SINGLE] ✓ Client initialized successfully")
+    except Exception as client_error:
+        print(f"[AI_SERVICE SINGLE] ✗ Client initialization failed: {client_error}")
+        print(traceback.format_exc())
+        return None
     
     # Style prompts
     style_prompts = {
@@ -519,7 +556,12 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
 {TESCO_COMPLIANCE_SUFFIX}"""
     }
     
+    print("[AI_SERVICE SINGLE] Step 4: Preparing style prompt...")
     style_prompt = style_prompts.get(style, style_prompts["studio"])
+    if not style_prompt:
+        print(f"[AI_SERVICE SINGLE] ✗ Invalid style: {style}")
+        return None
+    print(f"[AI_SERVICE SINGLE] ✓ Prompt prepared ({len(style_prompt)} chars)")
     
     try:
         full_prompt = f"""
@@ -529,8 +571,12 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
         Output a square 1:1 aspect ratio image.
         """
         
-        print(f"[AI_SERVICE DEBUG] Calling Gemini API for {style} style...")
+        print(f"[AI_SERVICE SINGLE] Step 5: Calling Gemini API...")
+        print(f"[AI_SERVICE SINGLE]   Model: {MODEL_ID}")
+        print(f"[AI_SERVICE SINGLE]   Prompt length: {len(full_prompt)} chars")
+        print(f"[AI_SERVICE SINGLE]   Image size: {len(product_bytes)} bytes")
         
+        api_start = datetime.now()
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=[
@@ -545,38 +591,64 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
             ),
         )
         
+        api_time = (datetime.now() - api_start).total_seconds()
+        print(f"[AI_SERVICE SINGLE] ✓ API responded in {api_time:.2f}s")
+        
         # Debug: Print full response structure
-        print(f"[AI_SERVICE DEBUG] Response type: {type(response)}")
-        print(f"[AI_SERVICE DEBUG] Response candidates: {len(response.candidates) if response.candidates else 0}")
+        print(f"[AI_SERVICE SINGLE] Step 6: Processing response...")
+        print(f"[AI_SERVICE SINGLE]   Response type: {type(response)}")
+        print(f"[AI_SERVICE SINGLE]   Has candidates: {bool(response.candidates)}")
+        if response.candidates:
+            print(f"[AI_SERVICE SINGLE]   Candidates count: {len(response.candidates)}")
         
         if response.candidates:
             for i, candidate in enumerate(response.candidates):
-                print(f"[AI_SERVICE DEBUG] Candidate {i}: {candidate}")
+                print(f"[AI_SERVICE SINGLE]   Candidate {i}:")
                 if hasattr(candidate, 'content') and candidate.content:
-                    print(f"[AI_SERVICE DEBUG] Candidate {i} content parts: {len(candidate.content.parts) if candidate.content.parts else 0}")
+                    parts_count = len(candidate.content.parts) if candidate.content.parts else 0
+                    print(f"[AI_SERVICE SINGLE]     Has content with {parts_count} part(s)")
                     for j, part in enumerate(candidate.content.parts):
-                        print(f"[AI_SERVICE DEBUG] Part {j}: type={type(part)}, has_inline_data={hasattr(part, 'inline_data')}")
-                        if hasattr(part, 'inline_data') and part.inline_data:
+                        has_inline = hasattr(part, 'inline_data') and part.inline_data
+                        has_text = hasattr(part, 'text') and part.text
+                        print(f"[AI_SERVICE SINGLE]     Part {j}: inline_data={has_inline}, text={has_text}")
+                        
+                        if has_inline:
                             image_data = part.inline_data.data
+                            data_size = len(image_data)
+                            print(f"[AI_SERVICE SINGLE]     ✓ Image data found: {data_size} bytes ({data_size/1024:.1f} KB)")
+                            
+                            encode_start = datetime.now()
                             base64_image = base64.b64encode(image_data).decode('utf-8')
-                            print(f"[AI_SERVICE DEBUG] ✅ {style} variation generated: {len(base64_image)} chars")
+                            encode_time = (datetime.now() - encode_start).total_seconds()
+                            b64_size = len(base64_image)
+                            print(f"[AI_SERVICE SINGLE]     ✓ Encoded to base64: {b64_size} chars ({b64_size/1024:.1f} KB) in {encode_time:.2f}s")
+                            
+                            total_time = (datetime.now() - start_time).total_seconds()
+                            print(f"[AI_SERVICE SINGLE] ✓✓✓ SUCCESS! {style} variation generated in {total_time:.2f}s")
+                            print("=" * 80)
+                            
                             # Clear image data from memory
                             del image_data
                             del part
                             gc.collect()
                             return base64_image
-                        elif hasattr(part, 'text'):
-                            print(f"[AI_SERVICE DEBUG] Part {j} has text: {part.text[:100] if part.text else 'None'}...")
+                        elif has_text:
+                            text_preview = part.text[:100] if part.text else 'None'
+                            print(f"[AI_SERVICE SINGLE]     Part {j} has text: {text_preview}...")
+                else:
+                    print(f"[AI_SERVICE SINGLE]     Candidate {i} has no content")
         
         # Fallback: Check response.parts directly
+        print("[AI_SERVICE SINGLE] Checking response.parts directly...")
         if response.parts:
-            print(f"[AI_SERVICE DEBUG] response.parts count: {len(response.parts)}")
+            print(f"[AI_SERVICE SINGLE]   Found {len(response.parts)} part(s) in response.parts")
             for i, part in enumerate(response.parts):
-                print(f"[AI_SERVICE DEBUG] Direct part {i}: type={type(part)}")
+                print(f"[AI_SERVICE SINGLE]   Part {i}: type={type(part)}")
                 if hasattr(part, 'inline_data') and part.inline_data:
                     image_data = part.inline_data.data
                     base64_image = base64.b64encode(image_data).decode('utf-8')
-                    print(f"[AI_SERVICE DEBUG] ✅ {style} variation generated: {len(base64_image)} chars")
+                    print(f"[AI_SERVICE SINGLE] ✓✓✓ SUCCESS via response.parts! {len(base64_image)} chars")
+                    print("=" * 80)
                     # Clear image data from memory
                     del image_data
                     del part
