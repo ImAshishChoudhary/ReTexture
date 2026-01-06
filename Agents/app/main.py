@@ -298,9 +298,6 @@ async def generate_variations_stream(req: VariationsRequest):
             # Process results as they complete
             print(f"[AGENT] ⏳ Waiting for variations to complete...")
             for i, style, future in futures:
-            # Process results as they complete
-            print(f"[AGENT] ⏳ Waiting for variations to complete...")
-            for i, style, future in futures:
                 print(f"\n[AGENT] === PROCESSING VARIATION {i + 1}/3 ({style}) ===")
 
                 # Send progress event when we start waiting for this one
