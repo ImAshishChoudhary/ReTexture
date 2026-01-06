@@ -17,8 +17,8 @@ print(f"[AI_SERVICE] GOOGLE_API_KEY loaded: {'Yes' if os.getenv('GOOGLE_API_KEY'
 # Get GCP credentials from environment variables
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2")
 LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-# Use imagen-3.0-generate-001 for image generation (correct model for Google AI image generation)
-MODEL_ID = os.getenv("GEMINI_MODEL_ID", "imagen-3.0-generate-001")
+# Use gemini-2.0-flash-exp which supports image generation via response_modalities
+MODEL_ID = os.getenv("GEMINI_MODEL_ID", "gemini-2.0-flash-exp")
 
 # Tesco Retail Media Compliance Rules - Applied to all AI generations
 TESCO_COMPLIANCE_SUFFIX = """
