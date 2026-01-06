@@ -272,7 +272,6 @@ async def generate_variations_stream(req: VariationsRequest):
             image_bytes = b64.b64decode(req.image_data)
             concept = req.concept or "product photography"
             print(f"[AGENT] Decoded image bytes: {len(image_bytes)}")
-            log_memory_usage("Before generation")
 
             # Send initial event
             start_event = f"data: {json.dumps({'type': 'start', 'total': 3})}\n\n"
@@ -295,7 +294,6 @@ async def generate_variations_stream(req: VariationsRequest):
                 try:
                     print(f"[AGENT] 🎨 Generating {style} variation...")
                     variation = generate_single_variation(image_bytes, concept, style)
-                    log_memory_usage(f"After {style} generation")
 
                     if variation:
                         print(
