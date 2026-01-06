@@ -55,7 +55,6 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
         const errorText = await response.text().catch(() => 'Unknown error');
         throw new Error(`API Error (${response.status}): ${errorText}`);
       }
-      }
 
       // Read SSE stream
       const reader = response.body?.getReader();
