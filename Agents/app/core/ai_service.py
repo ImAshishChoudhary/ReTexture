@@ -564,24 +564,35 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
     print(f"[AI_SERVICE SINGLE] ✓ Prompt prepared ({len(style_prompt)} chars)")
     
     try:
-        full_prompt = f"""Keep the product in the input image EXACTLY unchanged. Generate a new background: {style_prompt}. High realism, commercial photography."""
+        # Imagen prompt - focus on background only
+        edit_prompt = f"""Replace the background with: {style_prompt}. Keep the main subject/product exactly as it is, only change the background."""
         
-        print(f"[AI_SERVICE SINGLE] Step 5: Calling Imagen API for image editing...")
+        print(f"[AI_SERVICE SINGLE] Step 5: Calling Imagen 3 API for background editing...")
         print(f"[AI_SERVICE SINGLE]   Model: imagen-3.0-generate-001")
-        print(f"[AI_SERVICE SINGLE]   Prompt length: {len(full_prompt)} chars")
-        print(f"[AI_SERVICE SINGLE]   Image size: {len(product_bytes)} bytes")
+        print(f"[AI_SERVICE SINGLE]   Prompt length: {len(edit_prompt)} chars")
+        print(f"[AI_SERVICE SINGLE]   Reference image size: {len(product_bytes)} bytes")
         
         api_start = datetime.now()
         
-        # Use Imagen's edit_image method for background replacement
+        # Use Imagen 3 generate_images with reference image for editing
         response = client.models.generate_images(
             model='imagen-3.0-generate-001',
-            prompt=full_prompt,
+            prompt=edit_prompt,
             config=types.GenerateImagesConfig(
                 number_of_images=1,
                 aspect_ratio='1:1',
                 safety_filter_level='block_some',
                 person_generation='allow_adult',
+                # Include reference image for editing context
+                reference_images=[
+                    types.ReferenceImage(
+                        reference_type='STYLE',  # Use the product image as style reference
+                        reference_id=1,
+                        image=types.Image(
+                            image_bytes=product_bytes,
+                        ),
+                    ),
+                ],
             ),
         )
         
