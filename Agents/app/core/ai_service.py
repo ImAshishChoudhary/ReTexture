@@ -287,7 +287,7 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
 
 def generate_single_variation(image_bytes: bytes, user_concept: str, style: str = "studio") -> str | None:
     """
-    Generate a single background variation for SSE streaming.
+    Generate a single background variation for SSE streaming using rembg + styled backgrounds.
     Returns base64 encoded image immediately.
     
     Args:
@@ -299,92 +299,79 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
         Base64 encoded PNG image string, or None on failure
     """
     import base64
+    from rembg import remove
+    from PIL import ImageDraw, ImageFilter
     
-    # Process input image
-    with Image.open(io.BytesIO(image_bytes)) as img:
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        img.thumbnail((1024, 1024))
-        img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
-        product_bytes = img_byte_arr.getvalue()
+    print(f"[AI DEBUG] Starting {style} variation generation")
     
-    # Initialize client with API key (not Vertex AI)
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
+    # Remove background using rembg
+    try:
+        print(f"[AI DEBUG] Removing background with rembg...")
+        product_no_bg = remove(image_bytes)
+        product_img = Image.open(io.BytesIO(product_no_bg)).convert('RGBA')
+        print(f"[AI DEBUG] Background removed, product size: {product_img.size}")
+    except Exception as e:
+        print(f"[AI DEBUG] Error removing background: {e}")
         return None
     
-    client = genai.Client(api_key=api_key)
-    
-    # Style prompts
-    style_prompts = {
-        "studio": f"""Professional e-commerce product photography of the provided product.
-Background: Seamless pure white cyclorama studio backdrop, subtle gradient shadow beneath product.
-Lighting: Three-point studio lighting setup - key light (softbox 45° left), fill light (right), hair light (top-back). 
-Natural light falloff, no harsh highlights.
-Camera: Shot on Canon EOS R5, 100mm macro lens, f/8, 1/160s, ISO 100.
-Style: Clean, minimal, {user_concept}. Editorial quality suitable for Tesco retail website.
-Realism: Natural product texture preserved, subtle surface imperfections visible, realistic reflections on glossy surfaces.
-{TESCO_COMPLIANCE_SUFFIX}""",
-        "lifestyle": f"""High-end lifestyle product photography featuring the provided product.
-Scene: {user_concept} - Product naturally placed in an aspirational real-world setting, 
-slightly asymmetric composition for organic feel.
-Lighting: Natural window light from left side, golden hour warmth (5500K-6000K color temperature),
-soft shadows with natural falloff, subtle rim light from window reflection.
-Camera: Shot on Sony A7R IV, 35mm prime lens, f/2.8 for shallow depth of field, ISO 200.
-Bokeh on background elements, foreground product tack-sharp.
-Style: Editorial magazine quality, authentic lifestyle moment, premium brand aesthetic.
-Realism: Environmental reflections on product, natural dust particles in light rays, 
-micro-scratches on surfaces, realistic fabric textures.
-{TESCO_COMPLIANCE_SUFFIX}""",
-        "creative": f"""Bold commercial advertising campaign photography of the provided product.
-Scene: Dramatic studio setup with colored gel lighting, {user_concept}.
-Background: Deep gradient backdrop (dark to darker), professional studio environment.
-Lighting: Cinematic three-point lighting with colored gels - teal/orange complementary scheme,
-strong key light (grid softbox left), subtle fill, dramatic rim light creating edge separation.
-Light falloff creating depth and dimension. Volumetric light haze optional.
-Camera: Shot on Hasselblad H6D-100c, 80mm f/2.8 lens, medium format quality.
-Shallow DOF with product sharp, slight motion blur on any floating elements.
-Style: Premium advertising campaign, {user_concept}, brand hero shot quality.
-Realism: Product surface catching colored light realistically, specular highlights on edges,
-natural material properties (metal reflects, matte absorbs), subtle lens flare if applicable.
-{TESCO_COMPLIANCE_SUFFIX}"""
-    }
-    
-    style_prompt = style_prompts.get(style, style_prompts["studio"])
+    # Create styled background based on style
+    canvas_size = (1024, 1024)
     
     try:
-        full_prompt = f"""Product photography: {style_prompt}"""
+        if style == "studio":
+            # Clean white studio background with subtle gradient
+            print(f"[AI DEBUG] Creating studio background...")
+            background = Image.new('RGB', canvas_size, (255, 255, 255))
+            draw = ImageDraw.Draw(background)
+            # Add subtle gradient
+            for y in range(canvas_size[1]):
+                gray_value = int(255 - (y / canvas_size[1]) * 10)  # Very subtle gradient
+                draw.line([(0, y), (canvas_size[0], y)], fill=(gray_value, gray_value, gray_value))
+                
+        elif style == "lifestyle":
+            # Warm, soft gradient background
+            print(f"[AI DEBUG] Creating lifestyle background...")
+            background = Image.new('RGB', canvas_size, (245, 235, 220))
+            draw = ImageDraw.Draw(background)
+            # Warm gradient (beige to cream)
+            for y in range(canvas_size[1]):
+                r = int(245 - (y / canvas_size[1]) * 30)
+                g = int(235 - (y / canvas_size[1]) * 25)
+                b = int(220 - (y / canvas_size[1]) * 20)
+                draw.line([(0, y), (canvas_size[0], y)], fill=(r, g, b))
+            # Add subtle blur for softness
+            background = background.filter(ImageFilter.GaussianBlur(radius=3))
+                
+        else:  # creative
+            # Bold gradient background (dark teal to navy)
+            print(f"[AI DEBUG] Creating creative background...")
+            background = Image.new('RGB', canvas_size, (20, 40, 60))
+            draw = ImageDraw.Draw(background)
+            # Dramatic gradient
+            for y in range(canvas_size[1]):
+                r = int(20 + (y / canvas_size[1]) * 30)
+                g = int(40 + (y / canvas_size[1]) * 50)
+                b = int(60 + (y / canvas_size[1]) * 80)
+                draw.line([(0, y), (canvas_size[0], y)], fill=(r, g, b))
         
-        print(f"[AI DEBUG] Calling Imagen 3 for {style}")
-        print(f"[AI DEBUG] Model: imagen-3.0-generate-001")
-        print(f"[AI DEBUG] Prompt length: {len(full_prompt)}")
+        # Resize product to fit canvas (max 70% of canvas size)
+        max_size = int(min(canvas_size) * 0.7)
+        product_img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
-        # Use Imagen 3 for image generation
-        response = client.models.generate_images(
-            model='imagen-3.0-generate-001',
-            prompt=full_prompt,
-            config=types.GenerateImagesConfig(
-                number_of_images=1,
-                aspect_ratio='1:1',
-                safety_filter_level='block_some',
-                person_generation='allow_adult',
-            ),
-        )
+        # Center product on background
+        x = (canvas_size[0] - product_img.width) // 2
+        y = (canvas_size[1] - product_img.height) // 2
         
-        print(f"[AI DEBUG] Response received, processing...")
+        # Paste product onto background
+        background.paste(product_img, (x, y), product_img)
+        print(f"[AI DEBUG] Product composited at position ({x}, {y})")
         
-        # Imagen returns generated_images list
-        if hasattr(response, 'generated_images') and response.generated_images:
-            first_image = response.generated_images[0]
-            if hasattr(first_image, 'image') and hasattr(first_image.image, 'image_bytes'):
-                image_data = first_image.image.image_bytes
-                base64_image = base64.b64encode(image_data).decode('utf-8')
-                print(f"[AI DEBUG] ✓ Generated {len(base64_image)} chars for {style}")
-                return base64_image
-        
-        print(f"[AI DEBUG] ✗ No image data in response for {style}")
-        return None
+        # Convert to base64
+        output = io.BytesIO()
+        background.save(output, format='PNG', optimize=True)
+        base64_image = base64.b64encode(output.getvalue()).decode('utf-8')
+        print(f"[AI DEBUG] ✓ Generated {len(base64_image)} chars for {style}")
+        return base64_image
         
     except Exception as e:
         print(f"Error generating {style}: {e}")
