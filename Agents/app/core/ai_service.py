@@ -17,8 +17,8 @@ print(f"[AI_SERVICE] GOOGLE_API_KEY loaded: {'Yes' if os.getenv('GOOGLE_API_KEY'
 # Get GCP credentials from environment variables
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "firstproject-c5ac2")
 LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-# Try gemini-2.5-flash-image for image generation
-MODEL_ID = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash-image")
+# Use imagen-3.0-generate-001 for image generation (correct model for Google AI image generation)
+MODEL_ID = os.getenv("GEMINI_MODEL_ID", "imagen-3.0-generate-001")
 
 # Tesco Retail Media Compliance Rules - Applied to all AI generations
 TESCO_COMPLIANCE_SUFFIX = """
@@ -597,7 +597,16 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
         # Debug: Print full response structure
         print(f"[AI_SERVICE SINGLE] Step 6: Processing response...")
         print(f"[AI_SERVICE SINGLE]   Response type: {type(response)}")
-        print(f"[AI_SERVICE SINGLE]   Has candidates: {bool(response.candidates)}")
+        print(f"[AI_SERVICE SINGLE]   Response dir: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+        print(f"[AI_SERVICE SINGLE]   Has candidates: {bool(hasattr(response, 'candidates') and response.candidates)}")
+        print(f"[AI_SERVICE SINGLE]   Has parts: {bool(hasattr(response, 'parts') and response.parts)}")
+        print(f"[AI_SERVICE SINGLE]   Has text: {bool(hasattr(response, 'text') and response.text)}")
+        
+        # Try response.text first (might contain base64)
+        if hasattr(response, 'text') and response.text:
+            print(f"[AI_SERVICE SINGLE]   Response.text length: {len(response.text)}")
+            print(f"[AI_SERVICE SINGLE]   Response.text preview: {response.text[:200]}")
+        
         if response.candidates:
             print(f"[AI_SERVICE SINGLE]   Candidates count: {len(response.candidates)}")
         
@@ -640,10 +649,11 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
         
         # Fallback: Check response.parts directly
         print("[AI_SERVICE SINGLE] Checking response.parts directly...")
-        if response.parts:
+        if hasattr(response, 'parts') and response.parts:
             print(f"[AI_SERVICE SINGLE]   Found {len(response.parts)} part(s) in response.parts")
             for i, part in enumerate(response.parts):
                 print(f"[AI_SERVICE SINGLE]   Part {i}: type={type(part)}")
+                print(f"[AI_SERVICE SINGLE]   Part {i} attributes: {[attr for attr in dir(part) if not attr.startswith('_')]}")
                 if hasattr(part, 'inline_data') and part.inline_data:
                     image_data = part.inline_data.data
                     base64_image = base64.b64encode(image_data).decode('utf-8')
@@ -655,7 +665,18 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                     gc.collect()
                     return base64_image
         
-        print(f"[AI_SERVICE DEBUG] ❌ No image in response for {style}")
+        print(f"[AI_SERVICE SINGLE] ✗✗✗ NO IMAGE FOUND IN RESPONSE")
+        print(f"[AI_SERVICE SINGLE] This usually means:")
+        print(f"[AI_SERVICE SINGLE]   1. API Key is invalid or expired")
+        print(f"[AI_SERVICE SINGLE]   2. Model '{MODEL_ID}' doesn't support image generation")
+        print(f"[AI_SERVICE SINGLE]   3. Request format is incorrect")
+        print(f"[AI_SERVICE SINGLE]   4. API quota exceeded")
+        print(f"[AI_SERVICE SINGLE]")
+        print(f"[AI_SERVICE SINGLE] To fix:")
+        print(f"[AI_SERVICE SINGLE]   - Check GOOGLE_API_KEY is set in Render environment")
+        print(f"[AI_SERVICE SINGLE]   - Verify API key at https://aistudio.google.com/apikey")
+        print(f"[AI_SERVICE SINGLE]   - Check quota at https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com")
+        print("=" * 80)
         return None
         
     except Exception as e:
