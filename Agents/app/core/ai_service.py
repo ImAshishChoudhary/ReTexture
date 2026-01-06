@@ -512,7 +512,7 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
     
     print(f"[AI_SERVICE SINGLE] ✓ API key found: {api_key[:10]}...{api_key[-5:]}")
     
-    print("[AI_SERVICE SINGLE] Step 3: Initializing Gemini client...")
+    print("[AI_SERVICE SINGLE] Step 3: Initializing Imagen client...")
     try:
         client = genai.Client(api_key=api_key)
         print("[AI_SERVICE SINGLE] ✓ Client initialized successfully")
@@ -564,113 +564,69 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
     print(f"[AI_SERVICE SINGLE] ✓ Prompt prepared ({len(style_prompt)} chars)")
     
     try:
-        full_prompt = f"""
-        Keep the product in the input image EXACTLY unchanged.
-        Generate a new background: {style_prompt}
-        High realism, commercial photography.
-        Output a square 1:1 aspect ratio image.
-        """
+        full_prompt = f"""Keep the product in the input image EXACTLY unchanged. Generate a new background: {style_prompt}. High realism, commercial photography."""
         
-        print(f"[AI_SERVICE SINGLE] Step 5: Calling Gemini API...")
-        print(f"[AI_SERVICE SINGLE]   Model: {MODEL_ID}")
+        print(f"[AI_SERVICE SINGLE] Step 5: Calling Imagen API for image editing...")
+        print(f"[AI_SERVICE SINGLE]   Model: imagen-3.0-generate-001")
         print(f"[AI_SERVICE SINGLE]   Prompt length: {len(full_prompt)} chars")
         print(f"[AI_SERVICE SINGLE]   Image size: {len(product_bytes)} bytes")
         
         api_start = datetime.now()
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=[
-                types.Part.from_text(text=full_prompt),
-                types.Part.from_bytes(
-                    mime_type="image/png",
-                    data=product_bytes,
-                ),
-            ],
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"],
+        
+        # Use Imagen's edit_image method for background replacement
+        response = client.models.generate_images(
+            model='imagen-3.0-generate-001',
+            prompt=full_prompt,
+            config=types.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio='1:1',
+                safety_filter_level='block_some',
+                person_generation='allow_adult',
             ),
         )
         
         api_time = (datetime.now() - api_start).total_seconds()
         print(f"[AI_SERVICE SINGLE] ✓ API responded in {api_time:.2f}s")
         
-        # Debug: Print full response structure
-        print(f"[AI_SERVICE SINGLE] Step 6: Processing response...")
+        # Process Imagen response
+        print(f"[AI_SERVICE SINGLE] Step 6: Processing Imagen response...")
         print(f"[AI_SERVICE SINGLE]   Response type: {type(response)}")
-        print(f"[AI_SERVICE SINGLE]   Response dir: {[attr for attr in dir(response) if not attr.startswith('_')]}")
-        print(f"[AI_SERVICE SINGLE]   Has candidates: {bool(hasattr(response, 'candidates') and response.candidates)}")
-        print(f"[AI_SERVICE SINGLE]   Has parts: {bool(hasattr(response, 'parts') and response.parts)}")
-        print(f"[AI_SERVICE SINGLE]   Has text: {bool(hasattr(response, 'text') and response.text)}")
         
-        # Try response.text first (might contain base64)
-        if hasattr(response, 'text') and response.text:
-            print(f"[AI_SERVICE SINGLE]   Response.text length: {len(response.text)}")
-            print(f"[AI_SERVICE SINGLE]   Response.text preview: {response.text[:200]}")
-        
-        if response.candidates:
-            print(f"[AI_SERVICE SINGLE]   Candidates count: {len(response.candidates)}")
-        
-        if response.candidates:
-            for i, candidate in enumerate(response.candidates):
-                print(f"[AI_SERVICE SINGLE]   Candidate {i}:")
-                if hasattr(candidate, 'content') and candidate.content:
-                    parts_count = len(candidate.content.parts) if candidate.content.parts else 0
-                    print(f"[AI_SERVICE SINGLE]     Has content with {parts_count} part(s)")
-                    for j, part in enumerate(candidate.content.parts):
-                        has_inline = hasattr(part, 'inline_data') and part.inline_data
-                        has_text = hasattr(part, 'text') and part.text
-                        print(f"[AI_SERVICE SINGLE]     Part {j}: inline_data={has_inline}, text={has_text}")
-                        
-                        if has_inline:
-                            image_data = part.inline_data.data
-                            data_size = len(image_data)
-                            print(f"[AI_SERVICE SINGLE]     ✓ Image data found: {data_size} bytes ({data_size/1024:.1f} KB)")
-                            
-                            encode_start = datetime.now()
-                            base64_image = base64.b64encode(image_data).decode('utf-8')
-                            encode_time = (datetime.now() - encode_start).total_seconds()
-                            b64_size = len(base64_image)
-                            print(f"[AI_SERVICE SINGLE]     ✓ Encoded to base64: {b64_size} chars ({b64_size/1024:.1f} KB) in {encode_time:.2f}s")
-                            
-                            total_time = (datetime.now() - start_time).total_seconds()
-                            print(f"[AI_SERVICE SINGLE] ✓✓✓ SUCCESS! {style} variation generated in {total_time:.2f}s")
-                            print("=" * 80)
-                            
-                            # Clear image data from memory
-                            del image_data
-                            del part
-                            gc.collect()
-                            return base64_image
-                        elif has_text:
-                            text_preview = part.text[:100] if part.text else 'None'
-                            print(f"[AI_SERVICE SINGLE]     Part {j} has text: {text_preview}...")
-                else:
-                    print(f"[AI_SERVICE SINGLE]     Candidate {i} has no content")
-        
-        # Fallback: Check response.parts directly
-        print("[AI_SERVICE SINGLE] Checking response.parts directly...")
-        if hasattr(response, 'parts') and response.parts:
-            print(f"[AI_SERVICE SINGLE]   Found {len(response.parts)} part(s) in response.parts")
-            for i, part in enumerate(response.parts):
-                print(f"[AI_SERVICE SINGLE]   Part {i}: type={type(part)}")
-                print(f"[AI_SERVICE SINGLE]   Part {i} attributes: {[attr for attr in dir(part) if not attr.startswith('_')]}")
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    image_data = part.inline_data.data
-                    base64_image = base64.b64encode(image_data).decode('utf-8')
-                    print(f"[AI_SERVICE SINGLE] ✓✓✓ SUCCESS via response.parts! {len(base64_image)} chars")
-                    print("=" * 80)
-                    # Clear image data from memory
-                    del image_data
-                    del part
-                    gc.collect()
-                    return base64_image
+        # Imagen returns a GenerateImagesResponse with generated_images list
+        if hasattr(response, 'generated_images') and response.generated_images:
+            print(f"[AI_SERVICE SINGLE]   Found {len(response.generated_images)} generated image(s)")
+            
+            first_image = response.generated_images[0]
+            print(f"[AI_SERVICE SINGLE]   Image type: {type(first_image)}")
+            
+            # The image should have image.image_bytes
+            if hasattr(first_image, 'image') and hasattr(first_image.image, 'image_bytes'):
+                image_data = first_image.image.image_bytes
+                data_size = len(image_data)
+                print(f"[AI_SERVICE SINGLE]   ✓ Image data found: {data_size} bytes ({data_size/1024:.1f} KB)")
+                
+                encode_start = datetime.now()
+                base64_image = base64.b64encode(image_data).decode('utf-8')
+                encode_time = (datetime.now() - encode_start).total_seconds()
+                b64_size = len(base64_image)
+                print(f"[AI_SERVICE SINGLE]   ✓ Encoded to base64: {b64_size} chars ({b64_size/1024:.1f} KB) in {encode_time:.2f}s")
+                
+                total_time = (datetime.now() - start_time).total_seconds()
+                print(f"[AI_SERVICE SINGLE] ✓✓✓ SUCCESS! {style} variation generated in {total_time:.2f}s")
+                print("=" * 80)
+                
+                # Clear image data from memory
+                del image_data
+                gc.collect()
+                return base64_image
+            else:
+                print(f"[AI_SERVICE SINGLE]   Image attributes: {[attr for attr in dir(first_image) if not attr.startswith('_')]}")
         
         print(f"[AI_SERVICE SINGLE] ✗✗✗ NO IMAGE FOUND IN RESPONSE")
         print(f"[AI_SERVICE SINGLE] This usually means:")
         print(f"[AI_SERVICE SINGLE]   1. API Key is invalid or expired")
-        print(f"[AI_SERVICE SINGLE]   2. Model '{MODEL_ID}' doesn't support image generation")
+        print(f"[AI_SERVICE SINGLE]   2. Imagen API quota exceeded")
         print(f"[AI_SERVICE SINGLE]   3. Request format is incorrect")
-        print(f"[AI_SERVICE SINGLE]   4. API quota exceeded")
         print(f"[AI_SERVICE SINGLE]")
         print(f"[AI_SERVICE SINGLE] To fix:")
         print(f"[AI_SERVICE SINGLE]   - Check GOOGLE_API_KEY is set in Render environment")
