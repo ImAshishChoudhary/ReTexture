@@ -3,6 +3,8 @@ import { toast } from "sonner";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+console.log('[VARIATIONS] API Base URL:', API_BASE_URL);
+
 export interface Variation {
   id: string;
   url: string;
@@ -38,9 +40,15 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
 
+      console.log('[VARIATIONS] Calling API:', `${API_BASE_URL}/generate/variations/stream`);
+      console.log('[VARIATIONS] Image data length:', imageData.length);
+      console.log('[VARIATIONS] Concept:', concept);
+
       const response = await fetch(`${API_BASE_URL}/generate/variations/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           image_data: imageData,
           concept: concept,
@@ -48,11 +56,15 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
         signal: controller.signal,
       });
 
+      console.log('[VARIATIONS] Response status:', response.status);
+      console.log('[VARIATIONS] Response headers:', Object.fromEntries(response.headers.entries()));
+
       clearTimeout(timeoutId);
       toast.dismiss(coldStartToast);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('[VARIATIONS] Error response:', errorText);
         throw new Error(`API Error (${response.status}): ${errorText}`);
       }
 

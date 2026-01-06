@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 
@@ -23,20 +23,24 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Agent API")
 
-# Register headline routes
-app.include_router(headline_routes.router)
-# Register validation routes
-app.include_router(validate.router)
-
-
-# CORS
+# CORS - MUST be before router registration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all for debugging
+    allow_origins=[
+        "http://localhost:3000",
+        "https://retexture.vercel.app",
+        "https://*.vercel.app",
+        "*"  # Allow all for now
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Register routes AFTER CORS middleware
+app.include_router(headline_routes.router)
+app.include_router(validate.router)
 
 
 @app.get("/")
