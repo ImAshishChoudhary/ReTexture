@@ -23,6 +23,14 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
   const [loadingStyles, setLoadingStyles] = useState<string[]>([]);
 
   const generateVariations = useCallback(async (imageData: string, concept: string = "product photography") => {
+    console.log('[VARIATIONS] ========================================');
+    console.log('[VARIATIONS] generateVariations called');
+    console.log('[VARIATIONS] Timestamp:', new Date().toISOString());
+    console.log('[VARIATIONS] Image data length:', imageData.length, 'characters');
+    console.log('[VARIATIONS] Concept:', concept);
+    console.log('[VARIATIONS] API Base URL:', API_BASE_URL);
+    console.log('[VARIATIONS] ========================================');
+    
     setIsGenerating(true);
     setVariations([]);
     setLoadingStyles(["Studio", "Lifestyle", "Creative"]);
@@ -34,17 +42,26 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
       "Starting AI service... (This may take 30-60 seconds on first request)",
       { duration: 60000 }
     );
+    console.log('[VARIATIONS] Cold start toast displayed');
 
     try {
       // Call streaming endpoint with longer timeout for Render cold start
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+      const timeoutId = setTimeout(() => {
+        console.error('[VARIATIONS] Request timeout after 120 seconds');
+        controller.abort();
+      }, 120000); // 2 min timeout
 
-      console.log('[VARIATIONS] Calling API:', `${API_BASE_URL}/generate/variations/stream`);
-      console.log('[VARIATIONS] Image data length:', imageData.length);
-      console.log('[VARIATIONS] Concept:', concept);
+      const apiUrl = `${API_BASE_URL}/generate/variations/stream`;
+      console.log('[VARIATIONS] Calling API:', apiUrl);
+      console.log('[VARIATIONS] Request method: POST');
+      console.log('[VARIATIONS] Request headers:', { "Content-Type": "application/json" });
+      console.log('[VARIATIONS] Request body size:', JSON.stringify({
+          image_data: imageData,
+          concept: concept,
+        }).length, 'bytes');
 
-      const response = await fetch(`${API_BASE_URL}/generate/variations/stream`, {
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -75,12 +92,18 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
       const decoder = new TextDecoder();
       let buffer = "";
       const receivedVariations: Variation[] = [];
+      
+      console.log('[VARIATIONS] Starting to read SSE stream...');
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.log('[VARIATIONS] Stream reading complete');
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
+        console.log('[VARIATIONS] Buffer chunk received, size:', value.length);
 
         // Process complete SSE events
         const events = buffer.split("\n\n");
@@ -95,14 +118,17 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
               const jsonStr = line.slice(6);
               try {
                 const data = JSON.parse(jsonStr);
+                console.log('[VARIATIONS] SSE event received:', data.type, data);
 
                 if (data.type === "progress") {
+                  console.log(`[VARIATIONS] Progress: Generating ${styleNames[data.index]} (index ${data.index})`);
                   toast.loading(`Generating ${styleNames[data.index]} style...`, {
                     id: `var-progress-${data.index}`,
                   });
                 }
 
                 if (data.type === "variation" && data.data) {
+                  console.log(`[VARIATIONS] Variation received: ${styleNames[data.index]}, data length: ${data.data.length}`);
                   const newVariation: Variation = {
                     id: `var${Date.now()}_${data.index}`,
                     url: `data:image/png;base64,${data.data}`,
@@ -117,6 +143,7 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
                   // Add to variations
                   setVariations((prev) => [...prev, newVariation]);
                   receivedVariations.push(newVariation);
+                  console.log(`[VARIATIONS] Total variations so far: ${receivedVariations.length}`);
                   
                   options?.onVariationReceived?.(newVariation);
                   
@@ -126,6 +153,7 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
                 }
 
                 if (data.type === "error" && data.index !== undefined) {
+                  console.error(`[VARIATIONS] Error for ${styleNames[data.index]}:`, data.message || 'Unknown error');
                   setLoadingStyles((prev) =>
                     prev.filter((s) => s !== styleNames[data.index])
                   );
@@ -133,41 +161,60 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
                 }
 
                 if (data.type === "complete") {
+                  console.log('[VARIATIONS] Generation complete! Total variations:', receivedVariations.length);
                   setLoadingStyles([]);
                   options?.onComplete?.(receivedVariations);
                   toast.success("All variations generated!");
                 }
               } catch (e) {
-                console.warn("Failed to parse SSE data:", e);
+                console.warn("[VARIATIONS] Failed to parse SSE data:", jsonStr, e);
               }
             }
           }
         }
       }
     } catch (error) {
-      console.error("Variation generation error:", error);
+      console.error("[VARIATIONS] ========================================");
+      console.error("[VARIATIONS] ERROR caught in generateVariations");
+      console.error("[VARIATIONS] Timestamp:", new Date().toISOString());
+      console.error("[VARIATIONS] Error type:", error instanceof Error ? error.name : typeof error);
+      console.error("[VARIATIONS] Error object:", error);
+      if (error instanceof Error) {
+        console.error("[VARIATIONS] Error message:", error.message);
+        console.error("[VARIATIONS] Error stack:", error.stack);
+      }
+      console.error("[VARIATIONS] ========================================");
+      
       toast.dismiss(coldStartToast);
       
       let errorMessage = "Generation failed";
       
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
+          console.warn("[VARIATIONS] Request aborted due to timeout");
           errorMessage = "Request timeout. The service may be waking up. Please try again.";
         } else if (error.message.includes('502')) {
+          console.warn("[VARIATIONS] Backend returned 502 Bad Gateway (cold start)");
           errorMessage = "Backend service is starting up (Free tier cold start). Please wait 30 seconds and try again.";
         } else if (error.message.includes('Failed to fetch')) {
+          console.error("[VARIATIONS] Network error - cannot reach backend");
+          console.error("[VARIATIONS] Check backend URL:", API_BASE_URL);
           errorMessage = "Cannot connect to backend. Please check if the backend URL is correct in environment variables.";
         } else {
           errorMessage = error.message;
         }
       }
       
+      console.error("[VARIATIONS] Final error message to user:", errorMessage);
+      
       const err = new Error(errorMessage);
       options?.onError?.(err);
       toast.error(errorMessage, { duration: 5000 });
     } finally {
+      console.log('[VARIATIONS] Cleanup: Setting isGenerating to false');
       setIsGenerating(false);
       setLoadingStyles([]);
+      console.log('[VARIATIONS] generateVariations function complete');
     }
   }, [options]);
 
