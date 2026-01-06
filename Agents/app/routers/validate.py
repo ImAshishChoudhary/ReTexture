@@ -33,7 +33,7 @@ with open(RULES_PATH, "r", encoding="utf-8") as f:
 # Gemini configuration
 PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 LOCATION = os.getenv("GCP_LOCATION")
-MODEL_ID = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash-image")
+MODEL_ID = os.getenv("GEMINI_MODEL_ID")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 

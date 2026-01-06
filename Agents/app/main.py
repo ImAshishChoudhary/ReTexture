@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 
@@ -11,10 +11,6 @@ import base64
 import json
 import logging
 import os
-import sys
-import psutil
-import traceback
-from datetime import datetime
 from app.core.models import ValidationRequest, ValidationResponse
 from app.core.prompts import COMPLIANCE_SYSTEM_PROMPT
 from app.routers import headline_routes  # NEW: Headline generator routes
@@ -27,41 +23,20 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Agent API")
 
-# Memory monitoring helper
-def log_memory_usage(stage: str):
-    """Log current memory usage"""
-    try:
-        process = psutil.Process()
-        mem_info = process.memory_info()
-        mem_mb = mem_info.rss / 1024 / 1024
-        mem_percent = process.memory_percent()
-        print(f"[MEMORY] {stage}: {mem_mb:.2f} MB ({mem_percent:.1f}% of system)")
-        return mem_mb
-    except Exception as e:
-        print(f"[MEMORY] Error getting memory info: {e}")
-        return 0
+# Register headline routes
+app.include_router(headline_routes.router)
+# Register validation routes
+app.include_router(validate.router)
 
-# Log startup memory
-log_memory_usage("Application startup")
 
-# CORS - MUST be before router registration
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://retexture.vercel.app",
-        "https://*.vercel.app",
-        "*"  # Allow all for now
-    ],
+    allow_origins=["*"],  # Allow all for debugging
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
-
-# Register routes AFTER CORS middleware
-app.include_router(headline_routes.router)
-app.include_router(validate.router)
 
 
 @app.get("/")
@@ -192,127 +167,67 @@ async def generate_variations(req: VariationsRequest):
     Generate background variations for a product image.
     Note: This is a placeholder - actual Gemini AI integration requires GCP credentials.
     """
-    import gc
-    
-    request_start_time = datetime.now()
-    print("=" * 80)
-    print(f"[AGENT DEBUG] /generate/variations endpoint called at {request_start_time.isoformat()}")
-    print("=" * 80)
-    
-    mem_start = log_memory_usage("Request start")
+    print("=" * 60)
+    print("[AGENT DEBUG] /generate/variations endpoint called")
+    print("=" * 60)
 
     try:
-        print(f"[AGENT DEBUG] Request details:")
-        print(f"[AGENT DEBUG]   - Concept: {req.concept}")
-        print(f"[AGENT DEBUG]   - Image data length: {len(req.image_data)} chars")
-        print(f"[AGENT DEBUG]   - Image data type: {type(req.image_data)}")
-        print(f"[AGENT DEBUG]   - Image data preview: {req.image_data[:50]}...")
-        print(f"[AGENT DEBUG]   - Python version: {sys.version}")
-        print(f"[AGENT DEBUG]   - Process ID: {os.getpid()}")
+        print(f"[AGENT DEBUG] Concept: {req.concept}")
+        print(f"[AGENT DEBUG] Image data length: {len(req.image_data)} chars")
+        print(f"[AGENT DEBUG] Image data starts with: {req.image_data[:50]}...")
 
         logger.info(f"Generate variations called with concept: {req.concept}")
 
         # Try to use actual AI if credentials are available
         try:
-            print("[AGENT DEBUG] Step 1: Importing AI service...")
-            log_memory_usage("Before AI import")
-            
+            print("[AGENT DEBUG] Attempting to import AI service...")
             from app.core.ai_service import generate_variations_from_bytes
             import base64 as b64
 
-            print("[AGENT DEBUG] ✓ AI service imported successfully")
-            log_memory_usage("After AI import")
-            
-            print("[AGENT DEBUG] Step 2: Decoding base64 image data...")
-            decode_start = datetime.now()
-            
-            try:
-                image_bytes = b64.b64decode(req.image_data)
-                decode_time = (datetime.now() - decode_start).total_seconds()
-                print(f"[AGENT DEBUG] ✓ Decoded in {decode_time:.2f}s: {len(image_bytes)} bytes")
-                log_memory_usage("After decode")
-            except Exception as decode_error:
-                print(f"[AGENT DEBUG] ✗ Decode failed: {decode_error}")
-                print(f"[AGENT DEBUG] Traceback: {traceback.format_exc()}")
-                raise HTTPException(status_code=400, detail=f"Invalid base64 image data: {decode_error}")
+            print("[AGENT DEBUG] AI service imported successfully")
+            print("[AGENT DEBUG] Decoding base64 image data...")
 
-            print(f"[AGENT DEBUG] Step 3: Calling generate_variations_from_bytes")
-            print(f"[AGENT DEBUG]   - Concept: {req.concept or 'product photography'}")
-            print(f"[AGENT DEBUG]   - Image size: {len(image_bytes)} bytes")
-            
-            generation_start = datetime.now()
-            log_memory_usage("Before AI generation")
-            
-            try:
-                variations = generate_variations_from_bytes(
-                    image_bytes, req.concept or "product photography"
-                )
-                generation_time = (datetime.now() - generation_start).total_seconds()
-                print(f"[AGENT DEBUG] ✓ Generation completed in {generation_time:.2f}s")
-                log_memory_usage("After AI generation")
-            except Exception as gen_error:
-                print(f"[AGENT DEBUG] ✗ Generation failed: {type(gen_error).__name__}: {gen_error}")
-                print(f"[AGENT DEBUG] Full traceback:")
-                print(traceback.format_exc())
-                raise
-            
-            # Clear image bytes from memory immediately
-            print("[AGENT DEBUG] Step 4: Cleaning up memory...")
-            del image_bytes
-            gc.collect()
-            mem_after_cleanup = log_memory_usage("After cleanup")
-            print(f"[AGENT DEBUG] ✓ Memory freed: {mem_start - mem_after_cleanup:.2f} MB")
-            
-            print(f"[AGENT DEBUG] Step 5: Processing variations response")
-            print(f"[AGENT DEBUG]   - Return type: {type(variations)}")
-            print(f"[AGENT DEBUG]   - Is None: {variations is None}")
-            print(f"[AGENT DEBUG]   - Is empty: {len(variations) == 0 if variations else 'N/A'}")
+            image_bytes = b64.b64decode(req.image_data)
+            print(f"[AGENT DEBUG] Decoded image bytes: {len(image_bytes)} bytes")
+
+            print(
+                f"[AGENT DEBUG] Calling generate_variations_from_bytes with concept: {req.concept}"
+            )
+            variations = generate_variations_from_bytes(
+                image_bytes, req.concept or "product photography"
+            )
+            print(f"[AGENT DEBUG] AI service returned: {type(variations)}")
 
             if variations:
-                print(f"[AGENT DEBUG] ✓ Got {len(variations)} variations from AI")
+                print(f"[AGENT DEBUG] Got {len(variations)} variations from AI")
                 for i, v in enumerate(variations):
-                    var_len = len(v) if v else 0
-                    print(f"[AGENT DEBUG]   - Variation {i + 1}: {var_len} chars ({var_len/1024:.1f} KB)")
+                    print(
+                        f"[AGENT DEBUG] Variation {i + 1} length: {len(v) if v else 0} chars"
+                    )
 
-                total_time = (datetime.now() - request_start_time).total_seconds()
-                print(f"[AGENT DEBUG] ✓ Total request time: {total_time:.2f}s")
                 print("[AGENT DEBUG] Returning successful AI-generated variations")
-                print("=" * 80)
+                print("=" * 60)
                 return {"success": True, "variations": variations}
             else:
-                print("[AGENT DEBUG] ✗ AI returned empty/None variations")
-                print("[AGENT DEBUG] This might indicate:")
-                print("[AGENT DEBUG]   - API key issue")
-                print("[AGENT DEBUG]   - Gemini API error")
-                print("[AGENT DEBUG]   - Network connectivity problem")
-                log_memory_usage("Empty result")
+                print("[AGENT DEBUG] AI returned empty/None variations")
 
         except ImportError as ie:
-            print(f"[AGENT DEBUG] ✗ AI service import failed: {ie}")
-            print(f"[AGENT DEBUG] Import error details:")
-            print(f"[AGENT DEBUG]   - Error type: {type(ie).__name__}")
-            print(f"[AGENT DEBUG]   - Error message: {str(ie)}")
-            print(f"[AGENT DEBUG] Traceback:")
-            print(traceback.format_exc())
+            print(f"[AGENT DEBUG] AI service import failed: {ie}")
             logger.warning(f"AI generation not available: {ie}")
-            log_memory_usage("After import error")
-        except HTTPException:
-            raise  # Re-raise HTTP exceptions as-is
         except Exception as ai_error:
-            print(f"[AGENT DEBUG] ✗ AI generation exception caught")
-            print(f"[AGENT DEBUG]   - Error type: {type(ai_error).__name__}")
-            print(f"[AGENT DEBUG]   - Error message: {str(ai_error)}")
-            print(f"[AGENT DEBUG]   - Full traceback:")
-            print(traceback.format_exc())
-            logger.warning(f"AI generation error: {ai_error}")
-            log_memory_usage("After AI error")
+            print(
+                f"[AGENT DEBUG] AI generation error: {type(ai_error).__name__}: {ai_error}"
+            )
+            import traceback
+
+            print(f"[AGENT DEBUG] AI Traceback:\n{traceback.format_exc()}")
+            logger.warning(f"AI generation not available: {ai_error}")
 
         # Return the input image as a "variation" as fallback
         print("[AGENT DEBUG] Falling back to returning original image as variation")
-        total_time = (datetime.now() - request_start_time).total_seconds()
-        print(f"[AGENT DEBUG] Total fallback time: {total_time:.2f}s")
-        log_memory_usage("Fallback mode")
-        print("=" * 80)
+        print("=" * 60)
+        print("[AGENT DEBUG] /generate/variations completed (fallback mode)")
+        print("=" * 60)
 
         return {
             "success": True,
@@ -320,23 +235,13 @@ async def generate_variations(req: VariationsRequest):
             "message": "AI generation not configured - returning original image",
         }
 
-    except HTTPException as http_ex:
-        # Re-raise HTTP exceptions
-        print(f"[AGENT DEBUG] HTTP exception in generate_variations: {http_ex.status_code} - {http_ex.detail}")
-        log_memory_usage("HTTP exception")
-        raise
     except Exception as e:
-        print("=" * 80)
-        print(f"[AGENT DEBUG] ✗ FATAL ERROR in generate_variations")
-        print(f"[AGENT DEBUG]   - Time: {datetime.now().isoformat()}")
-        print(f"[AGENT DEBUG]   - Error type: {type(e).__name__}")
-        print(f"[AGENT DEBUG]   - Error message: {str(e)}")
-        print(f"[AGENT DEBUG]   - Full traceback:")
-        print(traceback.format_exc())
-        log_memory_usage("Fatal error")
-        print("=" * 80)
+        print(f"[AGENT DEBUG] ERROR in generate_variations: {type(e).__name__}: {e}")
+        import traceback
+
+        print(f"[AGENT DEBUG] Traceback:\n{traceback.format_exc()}")
         logger.error(f"Error generating variations: {e}")
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Streaming Variations Endpoint (SSE)
