@@ -159,6 +159,7 @@ def generate_variations_from_bytes(image_bytes: bytes, user_concept: str) -> lis
     Returns list of base64 encoded PNG images.
     """
     import base64
+    import gc
     
     print("=" * 60)
     print("[AI_SERVICE DEBUG] generate_variations_from_bytes called")
@@ -166,7 +167,7 @@ def generate_variations_from_bytes(image_bytes: bytes, user_concept: str) -> lis
     print(f"[AI_SERVICE DEBUG] Input image bytes: {len(image_bytes)} bytes")
     print(f"[AI_SERVICE DEBUG] User concept: {user_concept}")
     
-    # Process input image
+    # Process input image with reduced resolution to save memory
     print("[AI_SERVICE DEBUG] Opening and processing input image...")
     with Image.open(io.BytesIO(image_bytes)) as img:
         print(f"[AI_SERVICE DEBUG] Original image mode: {img.mode}, size: {img.size}")
@@ -174,13 +175,20 @@ def generate_variations_from_bytes(image_bytes: bytes, user_concept: str) -> lis
             img = img.convert('RGB')
             print(f"[AI_SERVICE DEBUG] Converted to RGB mode")
         
-        img.thumbnail((1024, 1024))
+        # Reduce from 1024x1024 to 768x768 to save memory
+        img.thumbnail((768, 768))
         print(f"[AI_SERVICE DEBUG] Resized to: {img.size}")
         
         img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
+        # Use PNG optimization to reduce file size
+        img.save(img_byte_arr, format='PNG', optimize=True)
         product_bytes = img_byte_arr.getvalue()
         print(f"[AI_SERVICE DEBUG] Processed image bytes: {len(product_bytes)} bytes")
+    
+    # Clear byte array from memory
+    img_byte_arr.close()
+    del img_byte_arr
+    gc.collect()
 
     print("[AI_SERVICE DEBUG] Initializing Gemini client...")
     print(f"[AI_SERVICE DEBUG] PROJECT_ID: {PROJECT_ID}")
@@ -294,9 +302,19 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                             generated_base64.append(base64_str)
                             print(f"[AI_SERVICE DEBUG] ✅ VARIATION {variation_num} GENERATED SUCCESSFULLY!")
                             print(f"[AI_SERVICE DEBUG] Total variations so far: {len(generated_base64)}")
+                            
+                            # Clear image data from memory immediately
+                            del img_data
+                            del base64_str
+                            del part
+                            gc.collect()
                             break
                 else:
                     print(f"[AI_SERVICE DEBUG] ⚠️ No parts/candidates in response for variation {variation_num}")
+                
+                # Clear response from memory
+                del response
+                gc.collect()
                 
                 # Success - break out of retry loop
                 break
@@ -344,19 +362,27 @@ def generate_single_variation(image_bytes: bytes, user_concept: str, style: str 
         Base64 encoded PNG image string, or None on failure
     """
     import base64
+    import gc
     
     print(f"\n[AI_SERVICE DEBUG] generate_single_variation called")
     print(f"[AI_SERVICE DEBUG] Style: {style}")
     print(f"[AI_SERVICE DEBUG] Concept: {user_concept}")
     
-    # Process input image
+    # Process input image with reduced resolution to save memory
     with Image.open(io.BytesIO(image_bytes)) as img:
         if img.mode != 'RGB':
             img = img.convert('RGB')
-        img.thumbnail((1024, 1024))
+        # Reduce from 1024x1024 to 768x768 to save memory (40% less pixels)
+        img.thumbnail((768, 768))
         img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
+        # Use PNG optimization to reduce file size
+        img.save(img_byte_arr, format='PNG', optimize=True)
         product_bytes = img_byte_arr.getvalue()
+    
+    # Clear byte array from memory
+    img_byte_arr.close()
+    del img_byte_arr
+    gc.collect()
     
     # Initialize client with API key (not Vertex AI)
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -442,6 +468,10 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                             image_data = part.inline_data.data
                             base64_image = base64.b64encode(image_data).decode('utf-8')
                             print(f"[AI_SERVICE DEBUG] ✅ {style} variation generated: {len(base64_image)} chars")
+                            # Clear image data from memory
+                            del image_data
+                            del part
+                            gc.collect()
                             return base64_image
                         elif hasattr(part, 'text'):
                             print(f"[AI_SERVICE DEBUG] Part {j} has text: {part.text[:100] if part.text else 'None'}...")
@@ -455,6 +485,10 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
                     image_data = part.inline_data.data
                     base64_image = base64.b64encode(image_data).decode('utf-8')
                     print(f"[AI_SERVICE DEBUG] ✅ {style} variation generated: {len(base64_image)} chars")
+                    # Clear image data from memory
+                    del image_data
+                    del part
+                    gc.collect()
                     return base64_image
         
         print(f"[AI_SERVICE DEBUG] ❌ No image in response for {style}")
@@ -465,3 +499,7 @@ natural material properties (metal reflects, matte absorbs), subtle lens flare i
         import traceback
         print(f"[AI_SERVICE DEBUG] Traceback:\n{traceback.format_exc()}")
         return None
+    finally:
+        # Clean up product bytes and response
+        del product_bytes
+        gc.collect()

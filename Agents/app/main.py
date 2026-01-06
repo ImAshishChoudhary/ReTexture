@@ -171,6 +171,8 @@ async def generate_variations(req: VariationsRequest):
     Generate background variations for a product image.
     Note: This is a placeholder - actual Gemini AI integration requires GCP credentials.
     """
+    import gc
+    
     print("=" * 60)
     print("[AGENT DEBUG] /generate/variations endpoint called")
     print("=" * 60)
@@ -200,6 +202,11 @@ async def generate_variations(req: VariationsRequest):
             variations = generate_variations_from_bytes(
                 image_bytes, req.concept or "product photography"
             )
+            
+            # Clear image bytes from memory immediately
+            del image_bytes
+            gc.collect()
+            
             print(f"[AGENT DEBUG] AI service returned: {type(variations)}")
 
             if variations:
