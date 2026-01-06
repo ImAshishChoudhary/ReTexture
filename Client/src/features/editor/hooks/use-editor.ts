@@ -35,7 +35,7 @@ import { useLoadState } from "@/features/editor/hooks/use-load-state";
 
 // Fix Fabric.js textBaseline issue - override default to use valid value
 if (typeof fabric !== 'undefined' && fabric.Text) {
-  fabric.Text.prototype.textBaseline = 'alphabetic' as any;
+  (fabric.Text.prototype as any).textBaseline = 'alphabetic';
 }
 
 const buildEditor = ({
