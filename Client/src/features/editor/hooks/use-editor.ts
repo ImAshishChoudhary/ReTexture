@@ -33,9 +33,9 @@ import { useCanvasEvents } from "@/features/editor/hooks/use-canvas-events";
 import { useWindowEvents } from "@/features/editor/hooks/use-window-events";
 import { useLoadState } from "@/features/editor/hooks/use-load-state";
 
-// Fix Fabric.js textBaseline issue - override default to use valid value
+// Fix Fabric.js textBaseline issue - use 'middle' instead of 'alphabetic' to avoid browser warning
 if (typeof fabric !== 'undefined' && fabric.Text) {
-  (fabric.Text.prototype as any).textBaseline = 'alphabetic';
+  (fabric.Text.prototype as any).textBaseline = 'middle';
 }
 
 const buildEditor = ({
