@@ -513,14 +513,14 @@ export const ComplianceSidebar = ({
           {/* Compliance Results (if not using the section above) */}
           {false && results.length > 0 && (
             <div className="space-y-4">
-              {Object.entries(groupedResults).map(([category, items]) => (
+              {(Object.entries(groupedResults) as [string, ComplianceCheckResult[]][]).map(([category, items]) => (
                 <div key={category}>
                   <h4 className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                     {getCategoryIcon(category as ComplianceRule["category"])}
                     {category}
                   </h4>
                   <div className="space-y-1.5">
-                    {items.map((result) => (
+                    {items.map((result: ComplianceCheckResult) => (
                       <div
                         key={result.rule.id}
                         className={cn(

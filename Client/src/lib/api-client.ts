@@ -291,14 +291,17 @@ export interface ValidationResponse {
 
 /**
  * Validate canvas against Tesco compliance rules
- * Accepts either a base64 string or a CanvasData object
+ * Accepts either a base64 string, a CanvasData object, or a ValidationRequest
  */
-export async function validateCanvas(canvasData: CanvasData | string): Promise<ApiResponse<ValidationResponse>> {
+export async function validateCanvas(canvasData: CanvasData | string | ValidationRequest): Promise<ApiResponse<ValidationResponse>> {
   // Convert CanvasData to base64 string if needed
   let base64Canvas: string;
   
   if (typeof canvasData === 'string') {
     base64Canvas = canvasData;
+  } else if ('canvas' in canvasData) {
+    // ValidationRequest object
+    base64Canvas = canvasData.canvas;
   } else {
     const canvasJson = JSON.stringify(canvasData);
     base64Canvas = btoa(encodeURIComponent(canvasJson).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
