@@ -26,9 +26,18 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
     setLoadingStyles(["Studio", "Lifestyle", "Creative"]);
 
     const styleNames = ["Studio", "Lifestyle", "Creative"];
+    
+    // Show message about Render cold start
+    const coldStartToast = toast.loading(
+      "Starting AI service... (This may take 30-60 seconds on first request)",
+      { duration: 60000 }
+    );
 
     try {
-      // Call streaming endpoint
+      // Call streaming endpoint with longer timeout for Render cold start
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
       const response = await fetch(`${API_BASE_URL}/generate/variations/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,10 +45,16 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
           image_data: imageData,
           concept: concept,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+      toast.dismiss(coldStartToast);
+
       if (!response.ok) {
-        throw new Error(`Stream failed: ${response.status}`);
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`API Error (${response.status}): ${errorText}`);
+      }
       }
 
       // Read SSE stream
@@ -120,9 +135,25 @@ export const useGenerateVariations = (options?: UseVariationsOptions) => {
       }
     } catch (error) {
       console.error("Variation generation error:", error);
-      const err = error instanceof Error ? error : new Error("Generation failed");
+      toast.dismiss(coldStartToast);
+      
+      let errorMessage = "Generation failed";
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = "Request timeout. The service may be waking up. Please try again.";
+        } else if (error.message.includes('502')) {
+          errorMessage = "Backend service is starting up (Free tier cold start). Please wait 30 seconds and try again.";
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = "Cannot connect to backend. Please check if the backend URL is correct in environment variables.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      const err = new Error(errorMessage);
       options?.onError?.(err);
-      toast.error(err.message);
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setIsGenerating(false);
       setLoadingStyles([]);
