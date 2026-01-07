@@ -1,5 +1,8 @@
 # ReTexture - AI Powered Retail Media Compliance Platform
 
+[▶️ Watch Demo Video](./Retexture%20demo%20video.mp4)
+
+---
 **The Problem**
 
 Tesco's retail media business faces a critical bottleneck: every creative submission requires manual validation against 40+ brand guidelines.
