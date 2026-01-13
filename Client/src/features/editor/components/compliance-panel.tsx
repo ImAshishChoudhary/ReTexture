@@ -131,13 +131,6 @@ const RULES: ComplianceRule[] = [
     fix: true,
   },
   {
-    id: "TAG_TEXT",
-    name: "Tag Text",
-    desc: "Valid tag text",
-    cat: "Content",
-    fix: true,
-  },
-  {
     id: "CLUBCARD_DATE",
     name: "Clubcard Date",
     desc: "Date required",
@@ -420,6 +413,68 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
         };
 
         switch (ruleId) {
+          case "LOGO": {
+            // Simulate the toggle-on logic from TescoLogo component
+            // Check if logo already exists
+            const existingLogo = objects.find(
+              (o: fabric.Object) =>
+                (o as any).customId === "tesco-logo-element"
+            );
+            if (existingLogo) {
+              toast.info("Tesco logo already exists");
+              break;
+            }
+
+            // Use the same logic as TescoLogo's createLogo
+            const LOGO_SRC = "/Tesco_Logo.svg.png";
+            const size = 12; // percent of canvas width, default from TescoLogo
+            const opacity = 100;
+
+            // Find workspace (image area) dimensions
+            const workspace = canvas.getObjects().find(obj => obj.name === "clip");
+            const wsWidth = workspace?.width || canvasWidth;
+            const wsHeight = workspace?.height || canvasHeight;
+            const wsLeft = workspace?.left || 0;
+            const wsTop = workspace?.top || 0;
+
+            // Calculate logo size and position
+            const logoWidth = Math.round((wsWidth * size) / 100);
+            const logoHeight = Math.round(logoWidth / 3.5);
+            // Padding inside the image bounds (5% of smaller dimension)
+            const padding = Math.max(15, Math.min(wsWidth, wsHeight) * 0.03);
+            let posX = wsLeft + wsWidth - logoWidth - padding;
+            let posY = wsTop + wsHeight - logoHeight - padding;
+
+            try {
+              const logoImg = await loadImg(LOGO_SRC);
+              logoImg.set({
+                left: posX,
+                top: posY,
+                scaleX: logoWidth / (logoImg.width || 1),
+                scaleY: logoHeight / (logoImg.height || 1),
+                opacity: opacity / 100,
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
+                lockRotation: true,
+                cornerStyle: "circle",
+                cornerColor: "#3b82f6",
+                borderColor: "#3b82f6",
+              });
+              (logoImg as any).customId = "tesco-logo-element";
+              canvas.add(logoImg);
+              logoImg.bringToFront();
+              canvas.renderAll();
+              canvas.setActiveObject(logoImg);
+              fixed = true;
+              toast.success("Tesco logo added (toggle style)");
+            } catch (err) {
+              toast.error("Failed to add Tesco logo");
+            }
+            break;
+          }
+
           case "TESCO_TAG": {
             // Check if Tesco tag already exists
             const existingTag = objects.find(
@@ -462,83 +517,10 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
 
               canvas.add(img);
               canvas.bringToFront(img);
-              canvas.setActiveObject(img);
               fixed = true;
-              toast.success("Added Tesco tag (top-left edge)");
+              toast.success("Added Tesco tag sticker");
             } catch (err) {
-              console.error("Failed to load sticker:", err);
-              toast.error("Failed to load sticker image");
-            }
-            break;
-          }
-
-          case "LOGO": {
-            // Check if logo already exists
-            const existingLogo = objects.find(
-              (o: fabric.Object) =>
-                (o as any).isLogo || (o as any).customId === "brand-logo"
-            );
-            if (existingLogo) {
-              toast.info("Logo already exists");
-              break;
-            }
-
-            try {
-              const logoImg = await loadImg(TESCO_LOGO_PATH);
-              
-              // Logo size - 30% of canvas width (2X BIGGER)
-              const targetWidth = Math.round(canvasWidth * 0.30);
-              const scale = targetWidth / (logoImg.width || 100);
-              logoImg.scale(scale);
-              
-              const logoHeight = Math.round((logoImg.height || 40) * scale);
-              
-              // ========== HARDCODED: EXACT BOTTOM-RIGHT CORNER ==========
-              const posX = canvasWidth - targetWidth - 20;
-              const posY = canvasHeight - logoHeight - 20;
-              // ===========================================================
-              
-              console.log(`[LOGO] Canvas: ${canvasWidth}x${canvasHeight}, Logo: ${targetWidth}x${logoHeight}, Position: (${posX}, ${posY}) BOTTOM-RIGHT EDGE`);
-              
-              logoImg.set({
-                left: posX,
-                top: posY,
-                selectable: true,
-                originX: "left",
-                originY: "top",
-              });
-              
-              (logoImg as any).customId = "brand-logo";
-              (logoImg as any).isLogo = true;
-              
-              canvas.add(logoImg);
-              canvas.bringToFront(logoImg);
-              canvas.setActiveObject(logoImg);
-              fixed = true;
-              toast.success("Added Tesco logo (bottom-right edge)");
-            } catch (err) {
-              console.error("Failed to load Tesco logo, using text fallback:", err);
-              // Fallback text at EXACT BOTTOM-RIGHT CORNER
-              const textWidth = 150;
-              const posX = canvasWidth - textWidth - 10;  // Right edge
-              const posY = canvasHeight - 50 - 10;        // Bottom edge
-              
-              const logo = new fabric.Textbox("TESCO", {
-                left: posX,
-                top: posY,
-                width: textWidth,
-                fontSize: 36,
-                fontWeight: "bold",
-                fill: "#00539F",
-                fontFamily: "Arial Black, Arial",
-                textAlign: "center",
-              });
-              (logo as any).customId = "brand-logo";
-              (logo as any).isLogo = true;
-              canvas.add(logo);
-              canvas.bringToFront(logo);
-              fixed = true;
-              toast.success("Added Tesco text logo (bottom-right)");
+              toast.error("Failed to add Tesco tag");
             }
             break;
           }
@@ -652,8 +634,7 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
             );
             const existingHeadline = texts.find(
               (t: fabric.Object) => 
-                (t as any).customId === "headline" ||
-                ((t as fabric.Textbox).fontSize || 0) >= 36
+                (t as any).customId === "headline"  // Only delete if created by Fix
             );
             
             // If headline exists, remove it first to replace with new one
@@ -676,11 +657,16 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
 
             console.log(`[HEADLINE] Canvas: ${canvasWidth}x${canvasHeight}, Font: ${dynamicFontSize}px, Position: LEFT (${posX}, ${posY})`);
 
-            // Generate AI headline instead of placeholder
+            // Generate AI headline with timeout
             toast.loading("Generating headline...", { id: "headline-gen" });
-            let headlineText = "Fresh & Delicious"; // Default fallback
+            let headlineText = "Quality Guaranteed"; // Generic fallback
             try {
-              const generatedText = await generateContent("HEADLINE", getHeadline());
+              const generatedText = await Promise.race([
+                generateContent("HEADLINE", getHeadline()),
+                new Promise<string>((_, reject) => 
+                  setTimeout(() => reject(new Error("Timeout")), 5000)
+                )
+              ]);
               if (generatedText && generatedText.length > 0) {
                 headlineText = generatedText;
               }
@@ -702,6 +688,7 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
             (hl as any).customId = "headline";
             canvas.add(hl);
             canvas.bringToFront(hl);
+            canvas.renderAll();  // Force immediate render
             fixed = true;
             toast.success(`Added bold headline: "${headlineText}"`);
             break;
@@ -728,11 +715,16 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
             // Font size = 7% of canvas height (2X BIGGER)
             const dynamicSubFontSize = Math.round(canvasHeight * 0.07);
 
-            // Generate AI subhead
+            // Generate AI subhead with timeout
             toast.loading("Generating subheadline...", { id: "subhead-gen" });
-            let subheadText = "Discover simple routines for healthy, happy skin with our everyday essentials."; 
+            let subheadText = "Quality products for your everyday needs."; // Generic fallback
             try {
-              const generatedText = await generateContent("SUBHEAD", getHeadline());
+              const generatedText = await Promise.race([
+                generateContent("SUBHEAD", getHeadline()),
+                new Promise<string>((_, reject) => 
+                  setTimeout(() => reject(new Error("Timeout")), 5000)
+                )
+              ]);
               if (generatedText && generatedText.length > 0) {
                 if (generatedText.length < 30) {
                   subheadText = generatedText + " Discover quality products for your everyday needs.";
@@ -765,6 +757,7 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
             (sh as any).customId = "subhead";
             canvas.add(sh);
             canvas.bringToFront(sh);
+            canvas.renderAll();  // Force immediate render
 
             fixed = true;
             toast.success(`Added subheadline paragraph`);
@@ -866,22 +859,6 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
             break;
           }
 
-          case "TAG_TEXT": {
-            let fixedCount = 0;
-            objects.forEach((o: fabric.Object) => {
-              if ((o as any).isTescoTag && o.type === "textbox") {
-                (o as fabric.Textbox).set("text", "Only at Tesco");
-                fixedCount++;
-              }
-            });
-            if (fixedCount > 0) {
-              fixed = true;
-              toast.success("Fixed tag text");
-            } else {
-              toast.info("No text tags to fix");
-            }
-            break;
-          }
 
           case "BACKGROUND": {
             const hasBg = objects.some(
