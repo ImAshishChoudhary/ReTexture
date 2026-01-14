@@ -30,6 +30,9 @@ const TESCO_TAG_STICKERS = {
 // Tesco logo for brand logo fix (use existing badge)
 const TESCO_LOGO_PATH = "/badges/tesco-logo.png";
 
+// Drinkaware logo for alcohol compliance
+const DRINKAWARE_LOGO_PATH = "/stickers/drinkaware-logo.png";
+
 interface ComplianceRule {
   id: string;
   name: string;
@@ -207,9 +210,12 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
   const canvas = editor?.canvas || null;
 
   // Get canvas objects for API - include custom properties for backend recognition
-  const getCanvasObjects = useCallback((): CanvasObject[] => {
+  // NOTE: NOT using useCallback to ensure this ALWAYS captures the latest canvas state
+  // This fixes the bug where deleted elements were still showing in validation results
+  const getCanvasObjects = (): CanvasObject[] => {
     if (!canvas) return [];
-    return canvas.getObjects().map((obj: fabric.Object, i: number) => ({
+    
+    const objects = canvas.getObjects().map((obj: fabric.Object, i: number) => ({
       id: (obj as any).id || `obj-${i}`,
       type: obj.type || "unknown",
       left: obj.left || 0,
@@ -231,10 +237,17 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
       stickerType: (obj as any).stickerType,
       src: obj.type === "image" ? (obj as fabric.Image).getSrc() : undefined,
     }));
-  }, [canvas]);
+    
+    // Debug log to verify we're capturing current state
+    console.log('[COMPLIANCE] Canvas objects at validation time:', objects.length);
+    console.log('[COMPLIANCE] Objects:', objects.map(o => `${o.type}${o.customId ? ` (${o.customId})` : ''}`).join(', '));
+    
+    return objects;
+  };
 
   // Get headline text
-  const getHeadline = useCallback((): string => {
+  // NOTE: NOT using useCallback to ensure fresh state (same fix as getCanvasObjects)
+  const getHeadline = (): string => {
     if (!canvas) return "";
     let headline = "",
       maxSize = 0;
@@ -248,28 +261,26 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
       }
     });
     return headline;
-  }, [canvas]);
+  };
 
   // Generate AI content
-  const generateContent = useCallback(
-    async (rule: string, ctx?: string): Promise<string> => {
-      try {
-        const res = await generateContentForFix({
-          rule,
-          context: ctx,
-          canvas_objects: getCanvasObjects().map((o) => ({
-            type: o.type,
-            text: o.text,
-            fontSize: o.fontSize,
-          })),
-        });
-        return res.data?.content || "";
-      } catch {
-        return "";
-      }
-    },
-    [getCanvasObjects]
-  );
+  // NOTE: Removed getCanvasObjects from dependencies since it's no longer memoized
+  const generateContent = async (rule: string, ctx?: string): Promise<string> => {
+    try {
+      const res = await generateContentForFix({
+        rule,
+        context: ctx,
+        canvas_objects: getCanvasObjects().map((o) => ({
+          type: o.type,
+          text: o.text,
+          fontSize: o.fontSize,
+        })),
+      });
+      return res.data?.content || "";
+    } catch {
+      return "";
+    }
+  };
 
   // Validation mutation with realistic delay
   const validateMutation = useMutation({
@@ -471,6 +482,65 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
               toast.success("Tesco logo added (toggle style)");
             } catch (err) {
               toast.error("Failed to add Tesco logo");
+            }
+            break;
+          }
+
+          case "DRINKAWARE": {
+            // Check if drinkaware logo already exists
+            const existingDrinkaware = objects.find(
+              (o: fabric.Object) => (o as any).customId === "drinkaware-logo"
+            );
+            if (existingDrinkaware) {
+              toast.info("Drinkaware logo already exists");
+              break;
+            }
+
+            try {
+              const logoImg = await loadImg(DRINKAWARE_LOGO_PATH);
+              
+              // Size: 12% of canvas width (same as Tesco logo)
+              const size = 12;
+              const workspace = canvas.getObjects().find(obj => obj.name === "clip");
+              const wsWidth = workspace?.width || canvasWidth;
+              const wsHeight = workspace?.height || canvasHeight;
+              const wsLeft = workspace?.left || 0;
+              const wsTop = workspace?.top || 0;
+              
+              // Calculate logo dimensions
+              const logoWidth = Math.round((wsWidth * size) / 100);
+              const logoHeight = Math.round(logoWidth / 3.5);  // Maintain aspect ratio
+              
+              // Position: BOTTOM-LEFT corner
+              const padding = Math.max(15, Math.min(wsWidth, wsHeight) * 0.03);
+              const posX = wsLeft + padding;  // Left edge + padding
+              const posY = wsTop + wsHeight - logoHeight - padding;  // Bottom edge
+              
+              logoImg.set({
+                left: posX,
+                top: posY,
+                scaleX: logoWidth / (logoImg.width || 1),
+                scaleY: logoHeight / (logoImg.height || 1),
+                opacity: 1,
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
+                lockRotation: true,
+                cornerStyle: "circle",
+                cornerColor: "#3b82f6",
+                borderColor: "#3b82f6",
+              });
+              
+              (logoImg as any).customId = "drinkaware-logo";
+              canvas.add(logoImg);
+              logoImg.bringToFront();
+              canvas.renderAll();
+              canvas.setActiveObject(logoImg);
+              fixed = true;
+              toast.success("Drinkaware logo added");
+            } catch (err) {
+              toast.error("Failed to add Drinkaware logo");
             }
             break;
           }
@@ -934,7 +1004,9 @@ export function CompliancePanel({ editor, canvasWidth, canvasHeight }: Props) {
         setFixing(null);
       }
     },
-    [canvas, canvasWidth, canvasHeight, validateMutation, generateContent, getHeadline]
+    // Removed getCanvasObjects and getHeadline from dependencies since they're no longer memoized
+    // This ensures handleFix always uses the latest canvas state
+    [canvas, canvasWidth, canvasHeight, validateMutation, generateContent]
   );
 
   const toggle = (c: string) =>
